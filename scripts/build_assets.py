@@ -156,7 +156,43 @@ def stretch_legs(base):
 
 
 def stretch_arms(base):
-    out = base.copy()
+    a = np.array(base).astype(np.int16)
+    rgb = a[:, :, :3].astype(np.float32)
+    cream = np.sqrt(((rgb - np.array(CREAM)) ** 2).sum(axis=2)) < 65
+    labels, n = ndimage.label(cream & (a[:, :, 3] > 200))
+    nub_mask = np.zeros((H, W), dtype=bool)
+    nub_boxes = []
+    for i in range(1, n + 1):
+        ys, xs = np.where(labels == i)
+        if len(xs) < 600:
+            continue
+        if (xs.max() < 110 or xs.min() > 290) and 200 < ys.min() < 380 and ys.max() < 430:
+            nub_mask |= labels == i
+            nub_boxes.append((xs.min(), xs.max(), ys.min(), ys.max()))
+    nub_zone = ndimage.binary_dilation(nub_mask, iterations=11)
+
+    orange = (
+        (rgb[:, :, 0] > 210) & (rgb[:, :, 1] > 140) & (rgb[:, :, 1] < 215)
+        & (rgb[:, :, 2] > 55) & (rgb[:, :, 2] < 135) & (a[:, :, 3] > 0)
+    )
+    olabels, on = ndimage.label(orange)
+    if on:
+        sizes = ndimage.sum(orange, olabels, range(1, on + 1))
+        body = olabels == (int(np.argmax(sizes)) + 1)
+    else:
+        body = orange
+    a[:, :, 3][nub_zone & ~body] = 0
+    border = ndimage.binary_dilation(body, iterations=5) & ~body & nub_zone
+    a[:, :, :3][border] = [28, 27, 27]
+    a[:, :, 3][border] = 255
+    lum = 0.299 * rgb[:, :, 0] + 0.587 * rgb[:, :, 1] + 0.114 * rgb[:, :, 2]
+    for x0, x1, y0, y1 in nub_boxes:
+        box = np.zeros((H, W), dtype=bool)
+        box[max(0, y0 - 20):min(H, y1 + 35), max(0, x0 - 25):min(W, x1 + 25)] = True
+        stray = box & ~body & ~border & (lum < 105) & (a[:, :, 3] > 0)
+        a[:, :, 3][stray] = 0
+    out = Image.fromarray(a.astype(np.uint8))
+
     ov = Image.new('RGBA', (W * SS, H * SS), (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
 
@@ -168,22 +204,13 @@ def stretch_arms(base):
             d.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
     arms = [
-        ([(90, 340), (38, 245), (28, 125)], (28, 108), 1),
-        ([(310, 340), (362, 245), (372, 125)], (372, 108), -1),
+        [(78, 330), (52, 235), (32, 105)],
+        [(322, 330), (348, 235), (368, 105)],
     ]
-
-    def hand(cx, cy, inner, color, pad):
-        d.ellipse([s(cx - 22 - pad), s(cy - 32 - pad), s(cx + 22 + pad), s(cy + 32 + pad)], fill=color)
-        tx = cx - inner * 18
-        ty = cy + 18
-        d.ellipse([s(tx - 8 - pad), s(ty - 10 - pad), s(tx + 8 + pad), s(ty + 10 + pad)], fill=color)
-
-    for pts, paw, inner in arms:
-        capsule(pts, INK, 48)
-        hand(paw[0], paw[1], inner, INK, 5)
-    for pts, paw, inner in arms:
-        capsule(pts, CREAM, 38)
-        hand(paw[0], paw[1], inner, CREAM, 0)
+    for pts in arms:
+        capsule(pts, INK, 46)
+    for pts in arms:
+        capsule(pts, CREAM, 36)
 
     ov = ov.resize((W, H), Image.LANCZOS)
     return Image.alpha_composite(ov, out)
