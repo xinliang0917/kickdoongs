@@ -1,5 +1,5 @@
 ﻿const NAMES = [
-  'idle', 'stretch', 'sleepy', 'happy', 'hot',
+  'idle', 'stretch', 'stretch-legs', 'sleepy', 'happy', 'hot',
   'giggle', 'sauce', 'bored', 'confused',
   'love', 'shy', 'wave', 'goodnight',
   'angry', 'back', 'surprised', 'cuddle', 'skate',
@@ -65,7 +65,8 @@ function clamp(v, lo, hi) {
 }
 
 function applyDir() {
-  flipper.style.setProperty('--dir', '1');
+  const flip = currentName === 'skate' ? -dir : 1;
+  flipper.style.setProperty('--dir', String(flip));
 }
 
 function setDir(value) {

@@ -143,7 +143,7 @@ def add_sauce(canvas):
     return draw_overlay(canvas, fx)
 
 
-def stretch(base):
+def stretch_legs(base):
     cut = 430
     factor = 2.1
     lower_h = H - cut
@@ -152,24 +152,40 @@ def stretch(base):
     out.alpha_composite(base.crop((0, 0, W, cut)), (0, 0))
     lower = base.crop((0, cut, W, H)).resize((W, new_h - cut), Image.LANCZOS)
     out.alpha_composite(lower, (0, cut))
+    return out
 
-    ov = Image.new('RGBA', (W * SS, new_h * SS), (0, 0, 0, 0))
+
+def stretch_arms(base):
+    out = base.copy()
+    ov = Image.new('RGBA', (W * SS, H * SS), (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
 
-    def chain(points, color, width):
+    def capsule(points, color, width):
         pts = [(s(x), s(y)) for x, y in points]
         d.line(pts, fill=color, width=s(width), joint='curve')
         for x, y in pts:
             r = s(width) // 2
             d.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
-    left = [(90, 340), (30, 240), (26, 110)]
-    right = [(310, 340), (370, 240), (374, 110)]
-    for pts in (left, right):
-        chain(pts, INK, 42)
-    for pts in (left, right):
-        chain(pts, CREAM, 32)
-    ov = ov.resize((W, new_h), Image.LANCZOS)
+    arms = [
+        ([(90, 340), (38, 245), (28, 125)], (28, 108), 1),
+        ([(310, 340), (362, 245), (372, 125)], (372, 108), -1),
+    ]
+
+    def hand(cx, cy, inner, color, pad):
+        d.ellipse([s(cx - 22 - pad), s(cy - 32 - pad), s(cx + 22 + pad), s(cy + 32 + pad)], fill=color)
+        tx = cx - inner * 18
+        ty = cy + 18
+        d.ellipse([s(tx - 8 - pad), s(ty - 10 - pad), s(tx + 8 + pad), s(ty + 10 + pad)], fill=color)
+
+    for pts, paw, inner in arms:
+        capsule(pts, INK, 48)
+        hand(paw[0], paw[1], inner, INK, 5)
+    for pts, paw, inner in arms:
+        capsule(pts, CREAM, 38)
+        hand(paw[0], paw[1], inner, CREAM, 0)
+
+    ov = ov.resize((W, H), Image.LANCZOS)
     return Image.alpha_composite(ov, out)
 
 
@@ -244,8 +260,10 @@ def main():
 
     add_sauce(base).save(OUT / 'sauce.png')
 
-    st = stretch(base)
-    st.save(OUT / 'stretch.png')
+    st_legs = stretch_legs(base)
+    st_legs.save(OUT / 'stretch-legs.png')
+    st_arms = stretch_arms(base)
+    st_arms.save(OUT / 'stretch.png')
 
     skate = build_skate()
     skate.save(OUT / 'skate.png')
@@ -255,7 +273,7 @@ def main():
     icon.save(ROOT / 'assets' / 'icon.png')
 
     manifest = {}
-    for name in ['idle', 'sleepy', 'happy', 'hot', 'giggle', 'sauce', 'bored', 'confused', 'love', 'shy', 'wave', 'goodnight', 'angry', 'back', 'surprised', 'cuddle', 'stretch', 'skate']:
+    for name in ['idle', 'sleepy', 'happy', 'hot', 'giggle', 'sauce', 'bored', 'confused', 'love', 'shy', 'wave', 'goodnight', 'angry', 'back', 'surprised', 'cuddle', 'stretch', 'stretch-legs', 'skate']:
         img = Image.open(OUT / f'{name}.png')
         manifest[name] = {'w': img.width, 'h': img.height}
     import json

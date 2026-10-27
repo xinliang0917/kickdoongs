@@ -21,6 +21,7 @@ let exprTimer = null;
 let energyTimer = null;
 let lastTick = Date.now();
 let lastScreenCheck = 0;
+let stretchArmsNext = true;
 let sleepSince = 0;
 let lastUserAction = Date.now();
 let clickTimes = [];
@@ -75,11 +76,16 @@ const coldLines = [
   '冬天好讨厌……姐姐的怀里最暖和。',
 ];
 
-const stretchLines = [
-  '姐姐看！手和脚都可以伸这么长——',
+const armStretchLines = [
+  '姐姐看！手可以伸这么长——',
   '嘿——咻！够到酱料啦！',
-  '腿也可以伸很长哦。',
   '这样就能和姐姐更近了。',
+];
+
+const legStretchLines = [
+  '腿也可以伸很长哦。',
+  '看我的长腿！',
+  '一步就能走到姐姐那边。',
 ];
 
 const petLines = {
@@ -614,7 +620,13 @@ function stretchLimbs(auto = false) {
   if (mode === 'sleep') wake();
   stopWalk();
   mode = 'idle';
-  express('stretch', { speech: pick(stretchLines), effect: 'sparkle', hold: 3000 });
+  const useArms = stretchArmsNext;
+  stretchArmsNext = !stretchArmsNext;
+  express(useArms ? 'stretch' : 'stretch-legs', {
+    speech: pick(useArms ? armStretchLines : legStretchLines),
+    effect: 'sparkle',
+    hold: 3000,
+  });
   scheduleBehavior();
 }
 
