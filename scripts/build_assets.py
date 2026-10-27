@@ -152,7 +152,25 @@ def stretch(base):
     out.alpha_composite(base.crop((0, 0, W, cut)), (0, 0))
     lower = base.crop((0, cut, W, H)).resize((W, new_h - cut), Image.LANCZOS)
     out.alpha_composite(lower, (0, cut))
-    return out
+
+    ov = Image.new('RGBA', (W * SS, new_h * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+
+    def chain(points, color, width):
+        pts = [(s(x), s(y)) for x, y in points]
+        d.line(pts, fill=color, width=s(width), joint='curve')
+        for x, y in pts:
+            r = s(width) // 2
+            d.ellipse([x - r, y - r, x + r, y + r], fill=color)
+
+    left = [(90, 340), (30, 240), (26, 110)]
+    right = [(310, 340), (370, 240), (374, 110)]
+    for pts in (left, right):
+        chain(pts, INK, 42)
+    for pts in (left, right):
+        chain(pts, CREAM, 32)
+    ov = ov.resize((W, new_h), Image.LANCZOS)
+    return Image.alpha_composite(ov, out)
 
 
 def clean_skate_edges(img):
