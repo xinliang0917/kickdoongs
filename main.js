@@ -20,6 +20,7 @@ let behaviorTimer = null;
 let exprTimer = null;
 let energyTimer = null;
 let lastTick = Date.now();
+let lastScreenCheck = 0;
 let sleepSince = 0;
 let lastUserAction = Date.now();
 let clickTimes = [];
@@ -159,13 +160,42 @@ function groundFor(wa) {
   return wa.y + wa.height - WIN_H;
 }
 
-function workAreaForWindow() {
+function displayForWindow() {
   const b = win.getBounds();
+  return screen.getDisplayNearestPoint({
+    x: Math.round(b.x + WIN_W / 2),
+    y: Math.round(b.y + WIN_H / 2),
+  });
+}
+
+function workAreaForWindow() {
+  return displayForWindow().workArea;
+}
+
+function isOnAnyDisplay(bounds) {
+  return screen.getAllDisplays().some(({ workArea: a }) => {
+    const overlapX = Math.min(bounds.x + bounds.width, a.x + a.width) - Math.max(bounds.x, a.x);
+    const overlapY = Math.min(bounds.y + bounds.height, a.y + a.height) - Math.max(bounds.y, a.y);
+    return overlapX >= 80 && overlapY >= 80;
+  });
+}
+
+function ensureOnScreen() {
+  if (!win || win.isDestroyed() || drag.active) return;
+  if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
+  const b = win.getBounds();
+  if (isOnAnyDisplay(b)) return;
+
   const display = screen.getDisplayNearestPoint({
     x: Math.round(b.x + WIN_W / 2),
-    y: Math.round(b.y + WIN_H - 20),
+    y: Math.round(b.y + WIN_H / 2),
   });
-  return display.workArea;
+  const wa = display.workArea;
+  const nx = clamp(b.x, wa.x, wa.x + wa.width - WIN_W);
+  const ny = clamp(b.y, wa.y, groundFor(wa));
+  win.setPosition(Math.round(nx), Math.round(ny), false);
+  stopWalk();
+  saveConfig();
 }
 
 function positionInitial() {
@@ -428,6 +458,13 @@ function finishJump() {
   const impact = Math.abs(jump.vy);
   mode = 'idle';
   setWalking(false);
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  win.setPosition(
+    Math.round(clamp(b.x, wa.x, wa.x + wa.width - WIN_W)),
+    Math.round(groundFor(wa)),
+    false
+  );
   send('pet:land', { impact });
   express('happy', { speech: pick(jumpLines), effect: 'sparkle', hold: 1900 });
   saveConfig();
@@ -630,8 +667,14 @@ function startFall() {
 function land() {
   const impact = fall.vy;
   mode = 'idle';
-  fall = { vx: 0, vy: 0, ground: fall.ground };
-  win.setPosition(win.getBounds().x, fall.ground, false);
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  fall = { vx: 0, vy: 0, ground: groundFor(wa) };
+  win.setPosition(
+    Math.round(clamp(b.x, wa.x, wa.x + wa.width - WIN_W)),
+    Math.round(fall.ground),
+    false
+  );
   if (impact > 1250) {
     express('angry', { speech: pick(landLines), effect: 'anger', hold: 2800 });
   } else {
@@ -651,6 +694,11 @@ function tick() {
   if (!win.isVisible()) return;
   updatePointer();
   if (drag.active || mode === 'drag') return;
+
+  if (now - lastScreenCheck > 1200) {
+    lastScreenCheck = now;
+    ensureOnScreen();
+  }
 
   if (mode === 'walk' || mode === 'run') {
     const b = win.getBounds();
@@ -672,7 +720,8 @@ function tick() {
     }
   } else if (mode === 'jump') {
     const b = win.getBounds();
-    const wa = jump.wa || workAreaForWindow();
+    const wa = workAreaForWindow();
+    const ground = groundFor(wa);
     jump.vy += GRAVITY * dt;
     let nx = b.x + jump.vx * dt;
     let ny = b.y + jump.vy * dt;
@@ -683,8 +732,8 @@ function tick() {
       nx = wa.x + wa.width - WIN_W;
       jump.vx = 0;
     }
-    if (ny >= jump.ground) {
-      ny = jump.ground;
+    if (ny >= ground) {
+      ny = ground;
       win.setPosition(Math.round(nx), Math.round(ny), false);
       finishJump();
     } else {
@@ -693,6 +742,8 @@ function tick() {
   } else if (mode === 'fall') {
     const b = win.getBounds();
     const wa = workAreaForWindow();
+    const ground = groundFor(wa);
+    fall.ground = ground;
     fall.vy += GRAVITY * dt;
     fall.vx *= Math.pow(0.35, dt);
     let nx = b.x + fall.vx * dt;
@@ -704,8 +755,8 @@ function tick() {
       nx = wa.x + wa.width - WIN_W;
       fall.vx = -Math.abs(fall.vx) * 0.35;
     }
-    if (ny >= fall.ground) {
-      ny = fall.ground;
+    if (ny >= ground) {
+      ny = ground;
       win.setPosition(Math.round(nx), Math.round(ny), false);
       land();
     } else {
@@ -920,6 +971,7 @@ function updatePointer() {
 function ensureVisible() {
   if (!win) return;
   if (!win.isVisible()) win.showInactive();
+  ensureOnScreen();
   bringToFront();
 }
 
@@ -1191,10 +1243,11 @@ ipcMain.on('pet:drag-start', (_e, info) => {
   express('surprised', { speech: pick(grabLines), effect: 'exclamation', hold: 3000 });
 });
 
-ipcMain.on('pet:drag-move', (_e, pos) => {
+ipcMain.on('pet:drag-move', () => {
   if (!drag.active || !win) return;
-  const x = Math.round(Number(pos.x) - drag.offsetX);
-  const y = Math.round(Number(pos.y) - drag.offsetY);
+  const point = screen.getCursorScreenPoint();
+  const x = Math.round(point.x - drag.offsetX);
+  const y = Math.round(point.y - drag.offsetY);
   win.setPosition(x, y, false);
   drag.samples.push({ t: Date.now(), x, y });
   if (drag.samples.length > 12) drag.samples.shift();
@@ -1256,5 +1309,9 @@ if (!gotLock) {
       Math.min(b.y, groundFor(wa)),
       false
     );
+    setTimeout(ensureOnScreen, 400);
   });
+
+  app.on('display-added', () => setTimeout(ensureOnScreen, 400));
+  app.on('display-removed', () => setTimeout(ensureOnScreen, 400));
 }
