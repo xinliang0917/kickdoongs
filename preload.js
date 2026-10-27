@@ -1,0 +1,24 @@
+﻿const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('pet', {
+  loaded: () => ipcRenderer.send('pet:loaded'),
+  click: () => ipcRenderer.send('pet:click'),
+  dragStart: (info) => ipcRenderer.send('pet:drag-start', info),
+  dragMove: (pos) => ipcRenderer.send('pet:drag-move', pos),
+  dragEnd: () => ipcRenderer.send('pet:drag-end'),
+  action: (name) => ipcRenderer.send('pet:action', name),
+  menuState: (open) => ipcRenderer.send('pet:menu-state', open),
+  bubbleRect: (rect) => ipcRenderer.send('pet:bubble-rect', rect),
+  onExpress: (cb) => ipcRenderer.on('pet:express', (_e, data) => cb(data)),
+  onWalking: (cb) => ipcRenderer.on('pet:walking', (_e, data) => cb(data)),
+  onFacing: (cb) => ipcRenderer.on('pet:facing', (_e, data) => cb(data)),
+  onBubble: (cb) => ipcRenderer.on('pet:bubble', (_e, data) => cb(data)),
+  onEffect: (cb) => ipcRenderer.on('pet:effect', (_e, data) => cb(data)),
+  onKickflip: (cb) => ipcRenderer.on('pet:kickflip', (_e, data) => cb(data)),
+  onKickflipEnd: (cb) => ipcRenderer.on('pet:kickflip-end', () => cb()),
+  onSettings: (cb) => ipcRenderer.on('pet:settings', (_e, data) => cb(data)),
+  onTask: (cb) => ipcRenderer.on('pet:task', (_e, data) => cb(data)),
+  onLand: (cb) => ipcRenderer.on('pet:land', (_e, data) => cb(data)),
+  onResetInput: (cb) => ipcRenderer.on('pet:reset-input', () => cb()),
+  onCloseMenu: (cb) => ipcRenderer.on('pet:close-menu', () => cb()),
+});
