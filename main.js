@@ -237,11 +237,12 @@ function positionInitial() {
 function express(name, { speech = null, effect, hold = 3000, persistent = false, keepSpeech = false } = {}) {
   const displayName = darkMode ? 'back' : name;
   const finalSpeech = darkMode && !keepSpeech && speech ? pick(darkLines) : speech;
+  const finalEffect = darkMode && (effect === 'hearts' || effect === 'sparkle') ? 'dark' : effect;
   currentSprite = displayName;
   send('pet:express', {
     name: displayName,
     speech: finalSpeech,
-    effect,
+    effect: finalEffect,
     hold,
     persistent,
     sleeping: name === 'goodnight',
