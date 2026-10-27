@@ -70,11 +70,13 @@ const idleLines = [
 ];
 
 const darkLines = [
-  '嘤嘤……只喜欢我一个人吧...',
-  '我的世界里只有你...',
-  '不要抛下我...',
-  '只看着我...',
-  '好喜欢姐姐...',
+  '哼，别烦我。',
+  '姐姐，你很烦耶。',
+  '再戳我就咬你。',
+  '我现在不想理你。',
+  '离我远点……',
+  '烦死了。',
+  '别碰我。',
 ];
 
 const petLines = {
@@ -228,12 +230,13 @@ function positionInitial() {
   });
 }
 
-function express(name, { speech = null, effect, hold = 3000, persistent = false } = {}) {
+function express(name, { speech = null, effect, hold = 3000, persistent = false, keepSpeech = false } = {}) {
   const displayName = darkMode ? 'back' : name;
+  const finalSpeech = darkMode && !keepSpeech && speech ? pick(darkLines) : speech;
   currentSprite = displayName;
   send('pet:express', {
     name: displayName,
-    speech,
+    speech: finalSpeech,
     effect,
     hold,
     persistent,
@@ -275,7 +278,7 @@ function showDark(speech = null, effect = 'dark', hold = 6000, stay = false) {
   darkMode = true;
   darkStay = stay;
   clearTimeout(darkTimer);
-  express('back', { speech, effect, hold, persistent: true });
+  express('back', { speech, effect, hold, persistent: true, keepSpeech: true });
   if (!stay) {
     darkTimer = setTimeout(() => {
       if (darkMode && mode === 'idle') showLight();
@@ -374,6 +377,7 @@ function applyTask(data) {
     effect: TASK_EFFECT[state],
     hold: active ? 5200 : state === 'done' ? 6000 : 4000,
     persistent: active,
+    keepSpeech: true,
   });
 
   if (state === 'waiting') {
