@@ -18,8 +18,17 @@ function readRootPackage() {
 }
 
 function ensureElectron(file) {
-  if (!fs.existsSync(path.join(ELECTRON_DIST, file))) {
-    throw new Error('Electron runtime not found. Run npm install first.');
+  const binary = path.join(ELECTRON_DIST, file);
+  if (fs.existsSync(binary)) return;
+
+  console.log(`Electron runtime for ${PLATFORM}-${ARCH} not found, downloading it...`);
+  execFileSync(process.execPath, [path.join(ROOT, 'node_modules', 'electron', 'install.js')], {
+    stdio: 'inherit',
+    env: { ...process.env, ELECTRON_INSTALL_PLATFORM: PLATFORM, ELECTRON_INSTALL_ARCH: ARCH },
+  });
+
+  if (!fs.existsSync(binary)) {
+    throw new Error('Electron runtime still missing after install. Run npm install first.');
   }
 }
 
@@ -118,7 +127,7 @@ function buildMac(rootPkg) {
   const target = path.join(OUT_ROOT, `${APP_NAME}-darwin-${ARCH}`);
   const bundle = path.join(target, `${APP_NAME}.app`);
   fs.rmSync(target, { recursive: true, force: true });
-  fs.mkdirSync(OUT_ROOT, { recursive: true });
+  fs.mkdirSync(target, { recursive: true });
 
   execFileSync('ditto', [path.join(ELECTRON_DIST, 'Electron.app'), bundle], { stdio: 'inherit' });
 

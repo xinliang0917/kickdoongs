@@ -30,8 +30,6 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        env:
-          ELECTRON_INSTALL_ARCH: ${{ matrix.arch }}
         run: npm ci
 
       - name: Package app
