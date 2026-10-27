@@ -5,7 +5,7 @@
   'angry', 'back', 'surprised', 'cuddle', 'skate',
 ];
 
-const BASE_HEIGHT = 0.35;
+const BASE_HEIGHT = 0.315;
 const sprite = document.getElementById('sprite');
 const flipper = document.getElementById('flipper');
 const pet = document.getElementById('pet');
@@ -416,7 +416,9 @@ function setupEvents() {
     const effect = data.effect === undefined ? defaultEffects[data.name] : data.effect;
     setEffect(effect || null, !!data.persistent);
     showBubble(data.speech, data.hold);
-    if (data.name === 'goodnight' && data.persistent) {
+    if (typeof data.sleeping === 'boolean') {
+      sleeping = data.sleeping;
+    } else if (data.name === 'goodnight' && data.persistent) {
       sleeping = true;
     } else if (data.name !== 'goodnight') {
       sleeping = false;
@@ -558,5 +560,6 @@ async function boot() {
 }
 
 boot();
+
 
 

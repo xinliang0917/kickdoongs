@@ -38,6 +38,7 @@ let taskActive = false;
 let taskLastStamp = 0;
 let taskMissingSince = 0;
 let darkMode = false;
+let darkStay = false;
 let darkTimer = null;
 let attentionTop = false;
 let attentionTimer = null;
@@ -228,19 +229,35 @@ function positionInitial() {
 }
 
 function express(name, { speech = null, effect, hold = 3000, persistent = false } = {}) {
-  currentSprite = name;
-  send('pet:express', { name, speech, effect, hold, persistent });
+  const displayName = darkMode ? 'back' : name;
+  currentSprite = displayName;
+  send('pet:express', {
+    name: displayName,
+    speech,
+    effect,
+    hold,
+    persistent,
+    sleeping: name === 'goodnight',
+  });
   clearTimeout(exprTimer);
   exprTimer = null;
   if (persistent) return;
   exprTimer = setTimeout(() => {
     if (mode === 'sleep' || mode === 'drag' || mode === 'fall' || mode === 'jump') return;
-    send('pet:express', { name: 'idle', speech: null, effect: null, hold: 0, persistent: false });
+    send('pet:express', {
+      name: darkMode ? 'back' : 'idle',
+      speech: null,
+      effect: null,
+      hold: 0,
+      persistent: false,
+      sleeping: false,
+    });
   }, hold);
 }
 
 function clearDark() {
   darkMode = false;
+  darkStay = false;
   clearTimeout(darkTimer);
   darkTimer = null;
 }
@@ -248,18 +265,23 @@ function clearDark() {
 function showLight(speech = null, effect = null, hold = 0) {
   clearDark();
   express('idle', { speech, effect, hold });
+  if (tray) tray.setContextMenu(buildTrayMenu());
 }
 
-function showDark(speech = null, effect = 'dark', hold = 6000) {
+function showDark(speech = null, effect = 'dark', hold = 6000, stay = false) {
   if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
   if (mode === 'sleep') wake();
   stopWalk();
   darkMode = true;
+  darkStay = stay;
   clearTimeout(darkTimer);
   express('back', { speech, effect, hold, persistent: true });
-  darkTimer = setTimeout(() => {
-    if (darkMode && mode === 'idle') showLight();
-  }, hold);
+  if (!stay) {
+    darkTimer = setTimeout(() => {
+      if (darkMode && mode === 'idle') showLight();
+    }, hold);
+  }
+  if (tray) tray.setContextMenu(buildTrayMenu());
 }
 
 function toggleFlip() {
@@ -270,7 +292,7 @@ function toggleFlip() {
   if (darkMode) {
     showLight('嘤嘤……姐姐还是喜欢正面的我吧。', 'hearts', 2600);
   } else {
-    showDark(pick(darkLines), 'dark', 6500);
+    showDark(pick(darkLines), 'dark', 6500, true);
   }
   scheduleBehavior();
 }
@@ -327,7 +349,7 @@ function applyTask(data) {
   const detail = typeof data.detail === 'string' ? data.detail : progress?.current || '';
   taskInfo = { state, message, task, detail, progress };
   taskActive = active;
-  clearDark();
+  if (!darkStay) clearDark();
   send('pet:task', { state, message, task, detail, progress });
 
   clearTimeout(taskHideTimer);
@@ -415,7 +437,7 @@ function startWalk() {
     return;
   }
   stopWalk();
-  clearDark();
+  if (!darkStay) clearDark();
   const wa = workAreaForWindow();
   const minX = wa.x + 6;
   const maxX = wa.x + wa.width - WIN_W - 6;
@@ -444,7 +466,7 @@ function startRun() {
     return;
   }
   stopWalk();
-  clearDark();
+  if (!darkStay) clearDark();
   const wa = workAreaForWindow();
   const minX = wa.x + 4;
   const maxX = wa.x + wa.width - WIN_W - 4;
@@ -471,7 +493,7 @@ function startJump() {
     return;
   }
   stopWalk();
-  clearDark();
+  if (!darkStay) clearDark();
   const wa = workAreaForWindow();
   const ground = groundFor(wa);
   const b = win.getBounds();
@@ -535,7 +557,7 @@ function startSkate() {
   if (mode === 'sleep') wake();
   stopWalk();
   stopSkate();
-  clearDark();
+  if (!darkStay) clearDark();
 
   const wa = workAreaForWindow();
   const b = win.getBounds();
@@ -605,7 +627,7 @@ function petClick(fromMenu = false) {
   stopWalk();
   if (darkMode) {
     cfg.energy = Math.min(100, cfg.energy + 0.4);
-    showDark(pick(darkLines), 'dark', 5200);
+    showDark(pick(darkLines), 'dark', 5200, darkStay);
     return;
   }
   const now = Date.now();
@@ -628,7 +650,7 @@ function feed() {
   if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
   if (mode === 'sleep') wake();
   stopWalk();
-  clearDark();
+  if (!darkStay) clearDark();
   mode = 'idle';
   cfg.energy = Math.min(100, cfg.energy + 28);
   express('snack', { speech: pick(feedLines), effect: 'sparkle', hold: 4200 });
@@ -640,7 +662,7 @@ function feedVeggies() {
   if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
   if (mode === 'sleep') wake();
   stopWalk();
-  clearDark();
+  if (!darkStay) clearDark();
   mode = 'idle';
   cfg.energy = Math.min(100, cfg.energy + 34);
   express('happy', { speech: pick(veggieLines), effect: 'sparkle', hold: 4200 });
@@ -650,7 +672,7 @@ function feedVeggies() {
 function goSleep(auto = false) {
   if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
   stopWalk();
-  clearDark();
+  if (!darkStay) clearDark();
   mode = 'sleep';
   sleepSince = Date.now();
   express('goodnight', {
@@ -858,7 +880,7 @@ function idleBehavior() {
       scheduleBehavior();
       return;
     }
-    if (currentSprite === 'skate' || darkMode) {
+    if (currentSprite === 'skate' || (darkMode && !darkStay)) {
       scheduleBehavior();
       return;
     }
@@ -867,7 +889,7 @@ function idleBehavior() {
     if ((isNight() && r < 0.32) || (cfg.energy < 28 && r < 0.5)) {
       goSleep(true);
     } else if (r < d) {
-      showDark(pick(darkLines), 'dark', 5200 + Math.random() * 3200);
+      showDark(pick(darkLines), 'dark', 5200 + Math.random() * 3200, darkStay);
     } else if (r < d + 0.08) {
       startWalk();
     } else if (r < d + 0.14) {
@@ -907,7 +929,7 @@ function setScale(scale) {
 function setOnTop(onTop) {
   cfg.onTop = !!onTop;
   if (win) {
-    win.setAlwaysOnTop(cfg.onTop, 'floating');
+    win.setAlwaysOnTop(cfg.onTop, 'normal');
     if (cfg.onTop) {
       win.moveTop();
       setTimeout(bringToFront, 100);
@@ -919,7 +941,7 @@ function setOnTop(onTop) {
 
 function bringToFront() {
   if (!win || win.isDestroyed() || !cfg.onTop) return;
-  win.setAlwaysOnTop(true, 'floating');
+  win.setAlwaysOnTop(true, 'normal');
   win.moveTop();
 }
 
@@ -1057,7 +1079,7 @@ function showForAttention() {
   if (!cfg.onTop) {
     clearTimeout(attentionTimer);
     attentionTop = true;
-    win.setAlwaysOnTop(true, 'floating');
+    win.setAlwaysOnTop(true, 'normal');
     attentionTimer = setTimeout(() => {
       if (attentionTop && !cfg.onTop) {
         attentionTop = false;
@@ -1216,7 +1238,7 @@ function createWindow() {
     },
   });
 
-  win.setAlwaysOnTop(cfg.onTop, 'floating');
+  win.setAlwaysOnTop(cfg.onTop, 'normal');
   win.setIgnoreMouseEvents(true, { forward: true });
   pointerEnabled = false;
   win.loadFile('index.html');
@@ -1295,7 +1317,7 @@ ipcMain.on('pet:drag-start', (_e, info) => {
     /* still allow grabbing mid-fall */
   }
   const wasDark = darkMode;
-  clearDark();
+  if (!darkStay) clearDark();
   stopWalk();
   mode = 'drag';
   drag.active = true;
