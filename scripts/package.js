@@ -227,6 +227,11 @@ function main() {
 try {
   main();
 } catch (err) {
-  console.error(err.stack || err.message);
+  const message = err.stack || err.message || String(err);
+  console.error(message);
+  if (process.env.GITHUB_ACTIONS) {
+    const annotation = message.replace(/%/g, '%25').replace(/\r?\n/g, '%0A');
+    console.log(`::error::${annotation}`);
+  }
   process.exit(1);
 }
