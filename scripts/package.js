@@ -135,7 +135,11 @@ function ensureNsisIcon() {
 function buildWindowsInstaller(target, rootPkg) {
   const makensis = resolveMakensis();
   if (!makensis) {
-    throw new Error('makensis not found. Install NSIS or set the MAKENSIS environment variable.');
+    if (process.env.GITHUB_ACTIONS || process.env.REQUIRE_INSTALLER) {
+      throw new Error('makensis not found. Install NSIS or set the MAKENSIS environment variable.');
+    }
+    console.warn('makensis not found; skipping Windows installer. Install NSIS or set MAKENSIS.');
+    return null;
   }
 
   const setup = path.join(OUT_ROOT, `${APP_SLUG}-win32-${ARCH}-setup.exe`);
