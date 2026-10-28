@@ -1,6 +1,6 @@
 {
   "name": "qihou-pet",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "启猴 · 桌面宠物",
   "main": "main.js",
@@ -12,4 +12,3 @@
     "electron": "^45.0.0"
   }
 }
-

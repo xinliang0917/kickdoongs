@@ -1,19 +1,29 @@
-name: Build macOS
+name: Build packages
 
 on:
   workflow_dispatch:
   push:
+    branches:
+      - qihou
     tags:
       - 'v*'
 
 permissions:
   contents: read
 
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
+env:
+  PET_SLUG: qihou
+  PET_NAME: 启猴
+
 jobs:
-  build:
+  macos:
     name: macOS ${{ matrix.arch }}
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +38,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -37,9 +48,97 @@ jobs:
           PET_ARCH: ${{ matrix.arch }}
         run: npm run package
 
-      - name: Upload zip
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: qihou-macos-${{ matrix.arch }}
-          path: dist/*.zip
+          name: ${{ env.PET_SLUG }}-macos-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.dmg
           if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Exclude workspace from Defender
+        shell: pwsh
+        run: |
+          if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+            Get-MpComputerStatus | Select-Object AMServiceEnabled, RealTimeProtectionEnabled, AntivirusEnabled
+            try {
+              Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+              Add-MpPreference -ExclusionPath "$env:RUNNER_TEMP"
+              Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\electron\Cache"
+              Write-Host "Defender exclusions added"
+            } catch {
+              Write-Warning "Could not add Defender exclusions: $_"
+            }
+          } else {
+            Write-Host "Add-MpPreference is not available"
+          }
+
+      - name: Ensure NSIS
+        shell: pwsh
+        run: |
+          $paths = @(
+            "$env:ProgramFiles\NSIS\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ }
+          if (-not $paths) {
+            choco install nsis -y --no-progress
+            $paths = @(
+              "$env:ProgramFiles\NSIS\makensis.exe",
+              "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+            ) | Where-Object { Test-Path -LiteralPath $_ }
+          }
+          if (-not $paths) { throw 'NSIS (makensis) not found' }
+          "MAKENSIS=$($paths[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-Item $paths[0] | Select-Object FullName
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package app
+        run: npm run package
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PET_SLUG }}-windows-x64
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('{0}-latest', env.PET_SLUG) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('{0} {1}', env.PET_NAME, github.ref_name) || format('{0} 最新构建', env.PET_NAME) }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          generate_release_notes: ${{ startsWith(github.ref, 'refs/tags/') }}
+          files: artifacts/*
