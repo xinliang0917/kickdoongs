@@ -1,4 +1,5 @@
 ﻿import json
+import math
 import os
 
 import cv2
@@ -280,37 +281,31 @@ def shy_blush(im):
             )
 
 
-def strawberry(im):
+def blueberry(im):
     draw = ImageDraw.Draw(im)
-    cx, cy = 318, 352
-    body = [
-        (cx - 38, cy - 22), (cx - 45, cy + 10), (cx - 26, cy + 46),
-        (cx, cy + 64), (cx + 26, cy + 46), (cx + 45, cy + 10),
-        (cx + 38, cy - 22), (cx, cy - 34),
-    ]
-    draw.polygon(body, fill=(229, 64, 82, 255), outline=(75, 26, 32, 255))
-    leaves = [
-        (cx - 2, cy - 34), (cx - 30, cy - 46), (cx - 18, cy - 26),
-        (cx - 34, cy - 22), (cx - 10, cy - 14), (cx, cy - 6),
-        (cx + 10, cy - 14), (cx + 34, cy - 22), (cx + 18, cy - 26),
-        (cx + 30, cy - 46),
-    ]
-    draw.polygon(leaves, fill=(86, 178, 102, 255), outline=(38, 86, 52, 255))
-    for sx, sy in [
-        (-20, -2), (0, 4), (20, -2), (-10, 22), (10, 22),
-        (0, 42), (-24, 16), (24, 16),
-    ]:
-        draw.ellipse(
-            (cx + sx - 2, cy + sy - 3, cx + sx + 2, cy + sy + 3),
-            fill=(255, 236, 185, 255),
-        )
-    draw.arc(
-        (cx - 30, cy + 4, cx - 10, cy + 30),
-        110,
-        220,
-        fill=(255, 170, 180, 255),
-        width=4,
+    cx, cy = 318, 363
+    r = 60
+    draw.ellipse(
+        (cx - r, cy - r, cx + r, cy + r),
+        fill=(74, 99, 171, 255),
+        outline=(28, 34, 66, 255),
+        width=5,
     )
+    draw.arc(
+        (cx - r + 14, cy - r + 18, cx + r - 30, cy + r - 42),
+        200,
+        300,
+        fill=(132, 158, 220, 255),
+        width=8,
+    )
+    crown = []
+    for i in range(10):
+        radius = 12 if i % 2 == 0 else 5
+        angle = -math.pi / 2 + i * math.pi / 5
+        crown.append(
+            (cx + radius * math.cos(angle), cy - r + 12 + radius * math.sin(angle))
+        )
+    draw.polygon(crown, fill=(30, 38, 76, 255))
 
 
 def save(im, name, previews):
@@ -384,7 +379,7 @@ def main():
     save(im, "surprised", images)
 
     im = front_im.copy()
-    strawberry(im)
+    blueberry(im)
     save(im, "snack", images)
 
     save(dark_im, "back", images)

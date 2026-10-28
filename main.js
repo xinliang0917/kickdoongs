@@ -92,9 +92,7 @@ const petLines = {
 };
 
 const feedLines = [
-  '是姐姐给的草莓！嘤嘤～',
-  '谢谢姐姐投喂～',
-  '姐姐喂的最好吃。',
+  '🎵I hate it ～but I love it～🎵',
 ];
 const veggieLines = [
   '小虫！嘤嘤，谢谢姐姐！',
@@ -912,7 +910,7 @@ function idleBehavior() {
     } else if (r < d + 0.44) {
       express('confused', { speech: '嗯？姐姐你在忙吗？', effect: 'question', hold: 2600 });
     } else if (r < d + 0.5) {
-      express('hot', { speech: '好热……姐姐，我想吃草莓。', effect: 'sweat', hold: 2600 });
+      express('hot', { speech: '好热……姐姐，我想吃蓝莓。', effect: 'sweat', hold: 2600 });
     } else if (r < d + 0.56) {
       express('cuddle', { speech: '姐姐陪我待一会儿吧。', effect: 'hearts', hold: 3000 });
     } else if (r < d + 0.62) {
@@ -1125,7 +1123,7 @@ function buildTrayMenu() {
     { label: win && win.isVisible() ? '隐藏花东' : '显示花东', click: toggleShow },
     { type: 'separator' },
     { label: '摸摸头', click: () => { ensureVisible(); petClick(true); } },
-    { label: '喂草莓', click: feed },
+    { label: '喂蓝莓', click: feed },
     { label: '喂小虫', click: feedVeggies },
     { label: mode === 'sleep' ? '叫醒它' : '睡一觉', click: toggleSleep },
     { label: '去散步', click: () => { ensureVisible(); startWalk(); } },
