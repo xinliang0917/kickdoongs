@@ -36,6 +36,8 @@ function ensureElectron(file) {
     throw new Error('Electron runtime still missing after install. Run npm install first.');
   }
 
+  if (process.platform !== 'win32') return;
+
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
       const size = fs.statSync(binary).size;
@@ -92,23 +94,43 @@ function buildWindows(rootPkg) {
   const target = path.join(OUT_ROOT, `${APP_NAME}-win32-${ARCH}`);
   ensureElectron('electron.exe');
 
-  fs.mkdirSync(OUT_ROOT, { recursive: true });
+  fs.rmSync(target, { recursive: true, force: true });
+  fs.mkdirSync(target, { recursive: true });
+
+  const sourceExe = path.join(ELECTRON_DIST, 'electron.exe');
+  const targetExe = path.join(target, 'electron.exe');
+  console.log(`Copying electron.exe (source exists: ${fs.existsSync(sourceExe)})...`);
+  let exeCopied = false;
+  for (let attempt = 0; attempt < 3 && !exeCopied; attempt += 1) {
+    try {
+      fs.copyFileSync(sourceExe, targetExe);
+      exeCopied = true;
+    } catch (err) {
+      console.log(`copy electron.exe failed (attempt ${attempt + 1}/3): ${err.message}`);
+      fs.rmSync(ELECTRON_DIST, { recursive: true, force: true });
+      ensureElectron('electron.exe');
+    }
+  }
+  if (!exeCopied) {
+    throw new Error('Could not copy electron.exe after reinstalling Electron');
+  }
+
   console.log(`Copying Electron runtime to ${target}...`);
   retrySync(
     'copy Electron runtime',
     () => {
-      fs.rmSync(target, { recursive: true, force: true });
-      fs.cpSync(ELECTRON_DIST, target, { recursive: true, dereference: true });
+      fs.cpSync(ELECTRON_DIST, target, { recursive: true, dereference: true, force: true });
     },
     5,
     1000
   );
 
-  const sourceExe = path.join(ELECTRON_DIST, 'electron.exe');
-  const targetExe = path.join(target, 'electron.exe');
+  console.log(
+    `Runtime copy done (target exe: ${fs.existsSync(targetExe)}, source exe: ${fs.existsSync(sourceExe)})`
+  );
   if (!fs.existsSync(targetExe)) {
     console.log('electron.exe missing after copy, copying it directly...');
-    retrySync('copy electron.exe', () => fs.copyFileSync(sourceExe, targetExe), 5, 1000);
+    retrySync('copy electron.exe again', () => fs.copyFileSync(sourceExe, targetExe), 5, 1000);
   }
   if (!fs.existsSync(targetExe)) {
     const entries = fs.existsSync(target) ? fs.readdirSync(target).join(', ') : 'target missing';
