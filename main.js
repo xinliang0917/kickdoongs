@@ -849,7 +849,7 @@ function setScale(scale) {
 function setOnTop(onTop) {
   cfg.onTop = !!onTop;
   if (win) {
-    win.setAlwaysOnTop(cfg.onTop, 'floating');
+    win.setAlwaysOnTop(cfg.onTop, 'normal');
     if (cfg.onTop) {
       win.moveTop();
       setTimeout(bringToFront, 100);
@@ -861,7 +861,7 @@ function setOnTop(onTop) {
 
 function bringToFront() {
   if (!win || win.isDestroyed() || !cfg.onTop) return;
-  win.setAlwaysOnTop(true, 'floating');
+  win.setAlwaysOnTop(true, 'normal');
   win.moveTop();
 }
 
@@ -999,7 +999,7 @@ function showForAttention() {
   if (!cfg.onTop) {
     clearTimeout(attentionTimer);
     attentionTop = true;
-    win.setAlwaysOnTop(true, 'floating');
+    win.setAlwaysOnTop(true, 'normal');
     attentionTimer = setTimeout(() => {
       if (attentionTop && !cfg.onTop) {
         attentionTop = false;
@@ -1154,7 +1154,7 @@ function createWindow() {
     },
   });
 
-  win.setAlwaysOnTop(cfg.onTop, 'floating');
+  win.setAlwaysOnTop(cfg.onTop, 'normal');
   win.setIgnoreMouseEvents(true, { forward: true });
   pointerEnabled = false;
   win.loadFile('index.html');
