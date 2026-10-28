@@ -85,20 +85,22 @@ jobs:
       - name: Ensure NSIS
         shell: pwsh
         run: |
-          $paths = @(
+          $makensis = @(
             "$env:ProgramFiles\NSIS\makensis.exe",
-            "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
-          ) | Where-Object { Test-Path -LiteralPath $_ }
-          if (-not $paths) {
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "$env:ChocolateyInstall\bin\makensis.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $makensis) {
             choco install nsis -y --no-progress
-            $paths = @(
+            $makensis = @(
               "$env:ProgramFiles\NSIS\makensis.exe",
-              "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
-            ) | Where-Object { Test-Path -LiteralPath $_ }
+              "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+              "$env:ChocolateyInstall\bin\makensis.exe"
+            ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           }
-          if (-not $paths) { throw 'NSIS (makensis) not found' }
-          "MAKENSIS=$($paths[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Get-Item $paths[0] | Select-Object FullName
+          if (-not $makensis) { throw 'NSIS (makensis) not found' }
+          "MAKENSIS=$makensis" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Using $makensis"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
