@@ -15,11 +15,15 @@ concurrency:
   group: packages-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
+env:
+  PET_SLUG: huadong
+  PET_NAME: 花东
+
 jobs:
-  build:
+  macos:
     name: macOS ${{ matrix.arch }}
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -44,17 +48,19 @@ jobs:
           PET_ARCH: ${{ matrix.arch }}
         run: npm run package
 
-      - name: Upload zip
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: huadong-macos-${{ matrix.arch }}
-          path: dist/*.zip
+          name: ${{ env.PET_SLUG }}-macos-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.dmg
           if-no-files-found: error
 
   windows:
     name: Windows x64
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,6 +82,24 @@ jobs:
             Write-Host "Add-MpPreference is not available"
           }
 
+      - name: Ensure NSIS
+        shell: pwsh
+        run: |
+          $paths = @(
+            "$env:ProgramFiles\NSIS\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ }
+          if (-not $paths) {
+            choco install nsis -y --no-progress
+            $paths = @(
+              "$env:ProgramFiles\NSIS\makensis.exe",
+              "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+            ) | Where-Object { Test-Path -LiteralPath $_ }
+          }
+          if (-not $paths) { throw 'NSIS (makensis) not found' }
+          "MAKENSIS=$($paths[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-Item $paths[0] | Select-Object FullName
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -88,29 +112,33 @@ jobs:
       - name: Package app
         run: npm run package
 
-      - name: Upload zip
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: huadong-windows-x64
-          path: dist/*.zip
+          name: ${{ env.PET_SLUG }}-windows-x64
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
           if-no-files-found: error
 
   release:
     name: Publish release
-    needs: [build, windows]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download zips
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: Upload to GitHub Release
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.zip
-          generate_release_notes: true
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('{0}-latest', env.PET_SLUG) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('{0} {1}', env.PET_NAME, github.ref_name) || format('{0} 最新构建', env.PET_NAME) }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          generate_release_notes: ${{ startsWith(github.ref, 'refs/tags/') }}
+          files: artifacts/*

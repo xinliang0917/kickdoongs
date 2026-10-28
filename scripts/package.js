@@ -5,12 +5,19 @@ const { execFileSync } = require('node:child_process');
 
 const ROOT = path.dirname(__dirname);
 const APP_NAME = '花东';
+const APP_ID = 'huadong-pet';
 const BUNDLE_ID = 'com.huadong.pet';
 const OUT_ROOT = process.env.PET_OUT ? path.resolve(process.env.PET_OUT) : path.join(ROOT, 'dist');
 const ELECTRON_DIST = path.join(ROOT, 'node_modules', 'electron', 'dist');
 const APP_FILES = ['main.js', 'preload.js', 'renderer.js', 'index.html', 'styles.css'];
 const PLATFORM = process.platform;
 const ARCH = process.env.PET_ARCH || process.arch;
+const MAKENSIS_CANDIDATES = [
+  process.env.MAKENSIS,
+  'makensis.exe',
+  'C:\\Program Files (x86)\\NSIS\\makensis.exe',
+  'C:\\Program Files\\NSIS\\makensis.exe',
+];
 
 function readRootPackage() {
   const raw = fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8').replace(/^\uFEFF/, '');
@@ -62,7 +69,7 @@ function copyAppFiles(appDir, rootPkg) {
   fs.cpSync(path.join(ROOT, 'assets'), path.join(appDir, 'assets'), { recursive: true });
 
   const appPkg = {
-    name: 'huadong-pet',
+    name: APP_ID,
     productName: APP_NAME,
     version: rootPkg.version,
     description: rootPkg.description,
@@ -88,6 +95,122 @@ function retrySync(label, fn, attempts = 10, delayMs = 1000) {
     }
   }
   throw lastError;
+}
+
+function resolveMakensis() {
+  for (const candidate of MAKENSIS_CANDIDATES) {
+    if (!candidate) continue;
+    if (candidate === 'makensis.exe' || fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function ensureNsisIcon() {
+  const png = path.join(ROOT, 'assets', 'icon.png');
+  if (!fs.existsSync(png)) return null;
+  try {
+    const data = fs.readFileSync(png);
+    const header = Buffer.alloc(22);
+    header.writeUInt16LE(0, 0);
+    header.writeUInt16LE(1, 2);
+    header.writeUInt16LE(1, 4);
+    header.writeUInt8(0, 6);
+    header.writeUInt8(0, 7);
+    header.writeUInt8(0, 8);
+    header.writeUInt8(0, 9);
+    header.writeUInt16LE(1, 10);
+    header.writeUInt16LE(32, 12);
+    header.writeUInt32LE(data.length, 14);
+    header.writeUInt32LE(22, 18);
+    const ico = path.join(os.tmpdir(), `pet-${process.pid}.ico`);
+    fs.writeFileSync(ico, Buffer.concat([header, data]));
+    return ico;
+  } catch (err) {
+    console.warn(`icon generation skipped: ${err.message}`);
+    return null;
+  }
+}
+
+function buildWindowsInstaller(target, rootPkg) {
+  const makensis = resolveMakensis();
+  if (!makensis) {
+    throw new Error('makensis not found. Install NSIS or set the MAKENSIS environment variable.');
+  }
+
+  const setup = path.join(OUT_ROOT, `${APP_NAME}-win32-${ARCH}-setup.exe`);
+  const icon = ensureNsisIcon();
+  const version = rootPkg.version
+    .split('.')
+    .concat(['0', '0', '0'])
+    .slice(0, 4)
+    .map((part) => parseInt(part, 10) || 0)
+    .join('.');
+
+  const lines = [
+    'Unicode true',
+    '!include "MUI2.nsh"',
+    `Name "${APP_NAME}"`,
+    `OutFile "${setup}"`,
+    `InstallDir "$LOCALAPPDATA\\Programs\\${APP_NAME}"`,
+    `InstallDirRegKey HKCU "Software\\${APP_NAME}" "InstallDir"`,
+    'RequestExecutionLevel user',
+    'SetCompressor /SOLID lzma',
+    `VIProductVersion "${version}"`,
+    `VIAddVersionKey "ProductName" "${APP_NAME}"`,
+    `VIAddVersionKey "FileDescription" "${APP_NAME} 安装程序"`,
+    `VIAddVersionKey "FileVersion" "${rootPkg.version}"`,
+    `VIAddVersionKey "ProductVersion" "${rootPkg.version}"`,
+  ];
+
+  if (icon) {
+    lines.push(`!define MUI_ICON "${icon}"`);
+    lines.push(`!define MUI_UNICON "${icon}"`);
+  }
+
+  lines.push(
+    '!define MUI_ABORTWARNING',
+    `!define MUI_FINISHPAGE_RUN "$INSTDIR\\${APP_NAME}.exe"`,
+    '!insertmacro MUI_PAGE_WELCOME',
+    '!insertmacro MUI_PAGE_DIRECTORY',
+    '!insertmacro MUI_PAGE_INSTFILES',
+    '!insertmacro MUI_PAGE_FINISH',
+    '!insertmacro MUI_UNPAGE_CONFIRM',
+    '!insertmacro MUI_UNPAGE_INSTFILES',
+    '!insertmacro MUI_LANGUAGE "SimpChinese"',
+    'Section "Install"',
+    '  SetOutPath "$INSTDIR"',
+    `  File /r "${target}\\*.*"`,
+    '  WriteUninstaller "$INSTDIR\\Uninstall.exe"',
+    `  CreateDirectory "$SMPROGRAMS\\${APP_NAME}"`,
+    `  CreateShortcut "$SMPROGRAMS\\${APP_NAME}\\${APP_NAME}.lnk" "$INSTDIR\\${APP_NAME}.exe"`,
+    `  CreateShortcut "$DESKTOP\\${APP_NAME}.lnk" "$INSTDIR\\${APP_NAME}.exe"`,
+    `  WriteRegStr HKCU "Software\\${APP_NAME}" "InstallDir" "$INSTDIR"`,
+    `  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayName" "${APP_NAME}"`,
+    `  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayVersion" "${rootPkg.version}"`,
+    `  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayIcon" "$INSTDIR\\${APP_NAME}.exe"`,
+    `  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "InstallLocation" "$INSTDIR"`,
+    `  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "Publisher" "${APP_NAME}"`,
+    `  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "UninstallString" "$INSTDIR\\Uninstall.exe"`,
+    `  WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "NoModify" 1`,
+    `  WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "NoRepair" 1`,
+    'SectionEnd',
+    'Section "Uninstall"',
+    `  Delete "$DESKTOP\\${APP_NAME}.lnk"`,
+    `  Delete "$SMPROGRAMS\\${APP_NAME}\\${APP_NAME}.lnk"`,
+    `  RMDir "$SMPROGRAMS\\${APP_NAME}"`,
+    '  Delete "$INSTDIR\\Uninstall.exe"',
+    '  RMDir /r "$INSTDIR"',
+    `  DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}"`,
+    `  DeleteRegKey HKCU "Software\\${APP_NAME}"`,
+    'SectionEnd'
+  );
+
+  const script = path.join(os.tmpdir(), `pet-${process.pid}.nsi`);
+  fs.writeFileSync(script, `\uFEFF${lines.join('\n')}\n`, 'utf8');
+  console.log(`Building installer ${setup}...`);
+  execFileSync(makensis, ['/V2', script], { stdio: 'inherit' });
+  fs.rmSync(script, { force: true });
+  return setup;
 }
 
 function buildWindows(rootPkg) {
@@ -171,7 +294,9 @@ function buildWindows(rootPkg) {
     2000
   );
 
-  return { app: path.join(target, `${APP_NAME}.exe`), zip };
+  const setup = buildWindowsInstaller(target, rootPkg);
+
+  return { app: path.join(target, `${APP_NAME}.exe`), zip, setup };
 }
 
 function setPlistValue(plist, key, value) {
@@ -258,7 +383,22 @@ function buildMac(rootPkg) {
     stdio: 'inherit',
   });
 
-  return { app: bundle, zip };
+  let dmg = null;
+  try {
+    dmg = path.join(OUT_ROOT, `${APP_NAME}-darwin-${ARCH}.dmg`);
+    fs.rmSync(dmg, { force: true });
+    console.log(`Creating ${dmg}...`);
+    execFileSync(
+      'hdiutil',
+      ['create', '-volname', APP_NAME, '-srcfolder', bundle, '-ov', '-format', 'UDZO', dmg],
+      { stdio: 'inherit' }
+    );
+  } catch (err) {
+    console.warn(`dmg creation skipped: ${err.message}`);
+    dmg = null;
+  }
+
+  return { app: bundle, zip, dmg };
 }
 
 function main() {
@@ -272,6 +412,8 @@ function main() {
   if (!result) throw new Error(`Unsupported platform: ${PLATFORM}`);
   console.log(`app: ${result.app}`);
   console.log(`zip: ${result.zip}`);
+  if (result.setup) console.log(`setup: ${result.setup}`);
+  if (result.dmg) console.log(`dmg: ${result.dmg}`);
 }
 
 try {
