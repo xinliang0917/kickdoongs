@@ -88,6 +88,13 @@ const legStretchLines = [
   '一步就能走到姐姐那边。',
 ];
 
+const wrapLines = [
+  '汪汪！姐姐看我的新造型～',
+  '姐姐，我被包成一个卷啦！',
+  '这样暖暖的，姐姐抱抱嘛。',
+  '像不像一个会走路的酱料卷？',
+];
+
 const petLines = {
   happy: ['汪汪！好舒服～', '姐姐再摸摸～', '汪汪！今天也喜欢姐姐。', '好开心！汪汪！'],
   love: ['最喜欢姐姐了。', '抱抱姐姐！', '姐姐最好了。'],
@@ -630,6 +637,20 @@ function stretchLimbs(auto = false) {
   scheduleBehavior();
 }
 
+function wrapLook() {
+  ensureVisible();
+  if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
+  if (mode === 'sleep') wake();
+  stopWalk();
+  mode = 'idle';
+  express('wrap', {
+    speech: pick(wrapLines),
+    effect: 'hearts',
+    hold: 6000,
+  });
+  scheduleBehavior();
+}
+
 function goSleep(auto = false) {
   if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
   stopWalk();
@@ -734,6 +755,12 @@ function tick() {
   updatePointer();
   if (drag.active || mode === 'drag') return;
 
+  if (now - socialLastWrite > 1000) {
+    socialLastWrite = now;
+    writePresence();
+    checkSocial(now);
+  }
+
   if (now - lastScreenCheck > 1200) {
     lastScreenCheck = now;
     ensureOnScreen();
@@ -835,6 +862,11 @@ function tick() {
 }
 
 function idleBehavior() {
+  if (Date.now() < socialQuietUntil) {
+    scheduleBehavior();
+    return;
+  }
+
   if (revealed && mode === 'idle' && !drag.active) {
     if (taskActive) {
       scheduleBehavior();
@@ -877,6 +909,109 @@ function idleBehavior() {
   scheduleBehavior();
 }
 
+const SOCIAL_ID = 'jiuwang';
+const SOCIAL_NAME = '啾汪';
+const socialLines = {"tuxuan": ["汪汪！兔玹！", "兔玹，一起玩！", "兔玹，你好呀！"], "huadong": ["花东！一起玩！", "汪汪！花东！", "花东，你在干嘛？"], "default": ["汪汪！一起玩！", "你好呀！"]};
+const socialDarkLines = {};
+let socialDir = null;
+let socialLastWrite = 0;
+let socialCooldownUntil = 0;
+let socialQuietUntil = 0;
+let socialLastAt = 0;
+let socialLastTarget = '';
+
+function getSocialDir() {
+  if (!socialDir) {
+    socialDir = path.join(app.getPath('home'), '.desktop-pets');
+    fs.mkdirSync(socialDir, { recursive: true });
+  }
+  return socialDir;
+}
+
+function writePresence() {
+  if (!win || win.isDestroyed()) return;
+  const b = win.getBounds();
+  const data = {
+    id: SOCIAL_ID,
+    name: SOCIAL_NAME,
+    x: b.x,
+    y: b.y,
+    w: WIN_W,
+    h: WIN_H,
+    mode,
+    facing,
+    visible: win.isVisible(),
+    busy: !!taskActive,
+    socialAt: socialLastAt,
+    socialTarget: socialLastTarget,
+    updatedAt: Date.now(),
+  };
+  try {
+    fs.writeFileSync(path.join(getSocialDir(), `social-${SOCIAL_ID}.json`), JSON.stringify(data));
+  } catch {}
+}
+
+function socialInteract(other, now) {
+  const me = win.getBounds();
+  const dir = other.x + WIN_W / 2 > me.x + WIN_W / 2 ? 1 : -1;
+  setFacing(dir);
+  socialCooldownUntil = now + 30000 + Math.random() * 30000;
+  socialQuietUntil = now + 4200;
+  socialLastAt = now;
+  socialLastTarget = other.id || '';
+  const isDark = typeof darkMode !== 'undefined' && darkMode;
+  const lines = isDark
+    ? socialDarkLines[other.id] || socialDarkLines.default
+    : socialLines[other.id] || socialLines.default;
+  const speech = pick(lines);
+  if (isDark) {
+    express('back', { speech, effect: 'dark', hold: 3400, keepSpeech: true });
+  } else {
+    const expr = pick(['happy', 'wave', 'love']);
+    express(expr, { speech, effect: expr === 'love' ? 'hearts' : 'sparkle', hold: 3400 });
+  }
+}
+
+function checkSocial(now) {
+  if (!revealed || !win || win.isDestroyed() || !win.isVisible()) return;
+  if (drag.active || mode !== 'idle' || taskActive || now < socialCooldownUntil) return;
+  let files;
+  try {
+    files = fs.readdirSync(getSocialDir());
+  } catch {
+    return;
+  }
+  const me = win.getBounds();
+  const myDisplay = screen.getDisplayNearestPoint({
+    x: Math.round(me.x + WIN_W / 2),
+    y: Math.round(me.y + WIN_H),
+  });
+  for (const file of files) {
+    if (!file.startsWith('social-') || file === `social-${SOCIAL_ID}.json` || !file.endsWith('.json')) continue;
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(path.join(getSocialDir(), file), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (!data || !data.id || data.id === SOCIAL_ID || data.visible === false || data.busy) continue;
+    if (!Number.isFinite(data.x) || !Number.isFinite(data.y)) continue;
+    if (now - Number(data.updatedAt) > 3000) continue;
+    if (data.mode !== 'idle') continue;
+    const otherDisplay = screen.getDisplayNearestPoint({
+      x: Math.round(data.x + WIN_W / 2),
+      y: Math.round(data.y + WIN_H),
+    });
+    if (otherDisplay.id !== myDisplay.id) continue;
+    const dx = Math.abs(data.x + WIN_W / 2 - (me.x + WIN_W / 2));
+    const dy = Math.abs(data.y + WIN_H - (me.y + WIN_H));
+    if (dx < 360 && dy < 80) {
+      socialInteract(data, now);
+      return;
+    }
+  }
+}
+
 function scheduleBehavior() {
   clearTimeout(behaviorTimer);
   behaviorTimer = setTimeout(idleBehavior, 30000 + Math.random() * 40000);
@@ -891,7 +1026,7 @@ function setScale(scale) {
 function setOnTop(onTop) {
   cfg.onTop = !!onTop;
   if (win) {
-    win.setAlwaysOnTop(cfg.onTop, 'floating');
+    win.setAlwaysOnTop(cfg.onTop, 'normal');
     if (cfg.onTop) {
       win.moveTop();
       setTimeout(bringToFront, 100);
@@ -903,7 +1038,7 @@ function setOnTop(onTop) {
 
 function bringToFront() {
   if (!win || win.isDestroyed() || !cfg.onTop) return;
-  win.setAlwaysOnTop(true, 'floating');
+  win.setAlwaysOnTop(true, 'normal');
   win.moveTop();
 }
 
@@ -1041,7 +1176,7 @@ function showForAttention() {
   if (!cfg.onTop) {
     clearTimeout(attentionTimer);
     attentionTop = true;
-    win.setAlwaysOnTop(true, 'floating');
+    win.setAlwaysOnTop(true, 'normal');
     attentionTimer = setTimeout(() => {
       if (attentionTop && !cfg.onTop) {
         attentionTop = false;
@@ -1086,6 +1221,7 @@ function buildTrayMenu() {
     { label: '跳一跳', click: () => { ensureVisible(); startJump(); } },
     { label: '玩滑板', click: startSkate },
     { label: '伸手脚', click: () => { ensureVisible(); stretchLimbs(false); } },
+    { label: '卷起来', click: () => { ensureVisible(); wrapLook(); } },
     { type: 'separator' },
     {
       label: '大小',
@@ -1149,6 +1285,9 @@ function handleAction(action) {
     case 'stretch':
       stretchLimbs(false);
       break;
+    case 'wrap':
+      wrapLook();
+      break;
     case 'scale-small':
       setScale(0.8);
       break;
@@ -1200,7 +1339,7 @@ function createWindow() {
     },
   });
 
-  win.setAlwaysOnTop(cfg.onTop, 'floating');
+  win.setAlwaysOnTop(cfg.onTop, 'normal');
   win.setIgnoreMouseEvents(true, { forward: true });
   pointerEnabled = false;
   win.loadFile('index.html');
@@ -1239,6 +1378,7 @@ function reveal() {
   } else {
     express('wave', { speech: '汪汪！姐姐好呀，我是啾汪～', effect: 'sparkle', hold: 3600 });
   }
+  writePresence();
   lastTick = Date.now();
   loopTimer = setInterval(tick, 16);
   energyTimer = setInterval(() => {
