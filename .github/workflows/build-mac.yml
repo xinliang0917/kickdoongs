@@ -173,3 +173,17 @@ jobs:
           prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
           generate_release_notes: ${{ steps.meta.outputs.notes == 'true' }}
           files: artifacts/*
+
+      - name: Keep only the newest release for this pet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          SLUG: ${{ env.PET_SLUG }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate \
+            --jq ".[] | select(.tag_name != \"$TAG\") | select([.assets[].name] | any(.[]; startswith(\"$SLUG-\"))) | .tag_name" |
+          while IFS= read -r old; do
+            [ -z "$old" ] && continue
+            echo "Deleting old release: $old"
+            gh release delete "$old" --cleanup-tag -y || true
+          done
