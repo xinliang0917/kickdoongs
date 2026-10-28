@@ -35,6 +35,21 @@ function ensureElectron(file) {
   if (!fs.existsSync(binary)) {
     throw new Error('Electron runtime still missing after install. Run npm install first.');
   }
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const size = fs.statSync(binary).size;
+      if (size > 1000000) {
+        sleepSync(200);
+        if (fs.existsSync(binary) && fs.statSync(binary).size === size) return;
+      }
+    } catch {
+      /* keep waiting for the extraction to settle */
+    }
+    sleepSync(250);
+  }
+
+  throw new Error(`Electron runtime did not stabilize: ${binary}`);
 }
 
 function copyAppFiles(appDir, rootPkg) {

@@ -59,6 +59,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Exclude workspace from Defender
+        shell: pwsh
+        run: |
+          if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+            Get-MpComputerStatus | Select-Object AMServiceEnabled, RealTimeProtectionEnabled, AntivirusEnabled
+            try {
+              Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+              Add-MpPreference -ExclusionPath "$env:RUNNER_TEMP"
+              Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\electron\Cache"
+              Write-Host "Defender exclusions added"
+            } catch {
+              Write-Warning "Could not add Defender exclusions: $_"
+            }
+          } else {
+            Write-Host "Add-MpPreference is not available"
+          }
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
