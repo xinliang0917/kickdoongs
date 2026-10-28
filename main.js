@@ -946,7 +946,7 @@ let socialLastTarget = '';
 
 function getSocialDir() {
   if (!socialDir) {
-    socialDir = path.join(app.getPath('appData'), 'desktop-pets');
+    socialDir = path.join(app.getPath('home'), '.desktop-pets');
     fs.mkdirSync(socialDir, { recursive: true });
   }
   return socialDir;
@@ -1398,6 +1398,7 @@ function reveal() {
   } else {
     express('wave', { speech: '嘤嘤，姐姐好呀，我是花东～', effect: 'sparkle', hold: 3600 });
   }
+  writePresence();
   lastTick = Date.now();
   loopTimer = setInterval(tick, 16);
   energyTimer = setInterval(() => {
