@@ -1,6 +1,6 @@
-﻿{
+{
   "name": "blue-panda-pet",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "An interactive desktop pet built from a sticker sheet.",
   "main": "main.js",
