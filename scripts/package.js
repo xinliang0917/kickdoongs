@@ -6,6 +6,7 @@ const { execFileSync } = require('node:child_process');
 const ROOT = path.dirname(__dirname);
 const APP_NAME = '启猴';
 const APP_ID = 'qihou-pet';
+const APP_SLUG = 'qihou';
 const BUNDLE_ID = 'com.qihou.pet';
 const OUT_ROOT = process.env.PET_OUT ? path.resolve(process.env.PET_OUT) : path.join(ROOT, 'dist');
 const ELECTRON_DIST = path.join(ROOT, 'node_modules', 'electron', 'dist');
@@ -137,7 +138,7 @@ function buildWindowsInstaller(target, rootPkg) {
     throw new Error('makensis not found. Install NSIS or set the MAKENSIS environment variable.');
   }
 
-  const setup = path.join(OUT_ROOT, `${APP_NAME}-win32-${ARCH}-setup.exe`);
+  const setup = path.join(OUT_ROOT, `${APP_SLUG}-win32-${ARCH}-setup.exe`);
   const icon = ensureNsisIcon();
   const version = rootPkg.version
     .split('.')
@@ -274,7 +275,7 @@ function buildWindows(rootPkg) {
 
   copyAppFiles(path.join(target, 'resources', 'app'), rootPkg);
 
-  const zip = path.join(OUT_ROOT, `${APP_NAME}-win32-${ARCH}.zip`);
+  const zip = path.join(OUT_ROOT, `${APP_SLUG}-win32-${ARCH}.zip`);
   console.log(`Creating ${zip}...`);
   retrySync(
     'create zip',
@@ -377,7 +378,7 @@ function buildMac(rootPkg) {
     console.warn(`codesign skipped (install Xcode Command Line Tools to enable it): ${err.message}`);
   }
 
-  const zip = path.join(OUT_ROOT, `${APP_NAME}-darwin-${ARCH}.zip`);
+  const zip = path.join(OUT_ROOT, `${APP_SLUG}-darwin-${ARCH}.zip`);
   fs.rmSync(zip, { force: true });
   execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', bundle, zip], {
     stdio: 'inherit',
@@ -385,7 +386,7 @@ function buildMac(rootPkg) {
 
   let dmg = null;
   try {
-    dmg = path.join(OUT_ROOT, `${APP_NAME}-darwin-${ARCH}.dmg`);
+    dmg = path.join(OUT_ROOT, `${APP_SLUG}-darwin-${ARCH}.dmg`);
     fs.rmSync(dmg, { force: true });
     console.log(`Creating ${dmg}...`);
     execFileSync(
