@@ -134,11 +134,40 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "name=${PET_NAME} ${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${PET_SLUG}-latest" >> "$GITHUB_OUTPUT"
+            echo "name=${PET_NAME} 最新构建" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "notes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Clean previous packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release view "$TAG" --json assets --jq '.assets[].name' | while IFS= read -r name; do
+              case "$name" in
+                *.zip|*.dmg|*-setup.exe) gh release delete-asset "$TAG" "$name" -y || true ;;
+              esac
+            done
+          fi
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('{0}-latest', env.PET_SLUG) }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('{0} {1}', env.PET_NAME, github.ref_name) || format('{0} 最新构建', env.PET_NAME) }}
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          generate_release_notes: ${{ startsWith(github.ref, 'refs/tags/') }}
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          generate_release_notes: ${{ steps.meta.outputs.notes == 'true' }}
           files: artifacts/*
