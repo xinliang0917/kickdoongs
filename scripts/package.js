@@ -19,9 +19,14 @@ function readRootPackage() {
 
 function ensureElectron(file) {
   const binary = path.join(ELECTRON_DIST, file);
-  if (fs.existsSync(binary)) return;
+  const crossArch = ARCH !== process.arch;
+  if (fs.existsSync(binary) && !crossArch) return;
 
-  console.log(`Electron runtime for ${PLATFORM}-${ARCH} not found, downloading it...`);
+  if (crossArch) {
+    fs.rmSync(ELECTRON_DIST, { recursive: true, force: true });
+  }
+
+  console.log(`Downloading Electron runtime for ${PLATFORM}-${ARCH}...`);
   execFileSync(process.execPath, [path.join(ROOT, 'node_modules', 'electron', 'install.js')], {
     stdio: 'inherit',
     env: { ...process.env, ELECTRON_INSTALL_PLATFORM: PLATFORM, ELECTRON_INSTALL_ARCH: ARCH },
