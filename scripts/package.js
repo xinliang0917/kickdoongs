@@ -55,27 +55,70 @@ function copyAppFiles(appDir, rootPkg) {
   fs.writeFileSync(path.join(appDir, 'package.json'), `${JSON.stringify(appPkg, null, 2)}\n`);
 }
 
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function retrySync(label, fn, attempts = 10, delayMs = 1000) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return fn();
+    } catch (err) {
+      lastError = err;
+      console.log(`${label} failed (attempt ${attempt}/${attempts}): ${err.message}`);
+      if (attempt < attempts) sleepSync(delayMs);
+    }
+  }
+  throw lastError;
+}
+
 function buildWindows(rootPkg) {
   const target = path.join(OUT_ROOT, `${APP_NAME}-win32-${ARCH}`);
   ensureElectron('electron.exe');
 
-  fs.rmSync(target, { recursive: true, force: true });
   fs.mkdirSync(OUT_ROOT, { recursive: true });
-  fs.cpSync(ELECTRON_DIST, target, { recursive: true });
-  fs.renameSync(path.join(target, 'electron.exe'), path.join(target, `${APP_NAME}.exe`));
+  console.log(`Copying Electron runtime to ${target}...`);
+  retrySync(
+    'copy Electron runtime',
+    () => {
+      fs.rmSync(target, { recursive: true, force: true });
+      fs.cpSync(ELECTRON_DIST, target, { recursive: true });
+    },
+    5,
+    1000
+  );
+
+  console.log('Renaming Electron executable...');
+  retrySync(
+    'rename Electron executable',
+    () => {
+      fs.renameSync(path.join(target, 'electron.exe'), path.join(target, `${APP_NAME}.exe`));
+    },
+    15,
+    1000
+  );
 
   copyAppFiles(path.join(target, 'resources', 'app'), rootPkg);
 
   const zip = path.join(OUT_ROOT, `${APP_NAME}-win32-${ARCH}.zip`);
-  fs.rmSync(zip, { force: true });
-  execFileSync(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-Command',
-      `Compress-Archive -LiteralPath '${target}' -DestinationPath '${zip}' -Force`,
-    ],
-    { stdio: 'inherit' }
+  console.log(`Creating ${zip}...`);
+  retrySync(
+    'create zip',
+    () => {
+      fs.rmSync(zip, { force: true });
+      execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-Command',
+          `Compress-Archive -LiteralPath '${target}' -DestinationPath '${zip}' -Force`,
+        ],
+        { stdio: 'inherit' }
+      );
+    },
+    3,
+    2000
   );
 
   return { app: path.join(target, `${APP_NAME}.exe`), zip };
@@ -184,6 +227,6 @@ function main() {
 try {
   main();
 } catch (err) {
-  console.error(err.message);
+  console.error(err.stack || err.message);
   process.exit(1);
 }
