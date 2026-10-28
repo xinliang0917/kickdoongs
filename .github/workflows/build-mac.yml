@@ -1,4 +1,4 @@
-name: Build macOS
+name: Build packages
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: macos-${{ github.ref }}
+  group: packages-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 jobs:
@@ -51,9 +51,36 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package app
+        run: npm run package
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: huadong-windows-x64
+          path: dist/*.zip
+          if-no-files-found: error
+
   release:
     name: Publish release
-    needs: build
+    needs: [build, windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
