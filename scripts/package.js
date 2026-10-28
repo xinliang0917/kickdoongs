@@ -83,17 +83,30 @@ function buildWindows(rootPkg) {
     'copy Electron runtime',
     () => {
       fs.rmSync(target, { recursive: true, force: true });
-      fs.cpSync(ELECTRON_DIST, target, { recursive: true });
+      fs.cpSync(ELECTRON_DIST, target, { recursive: true, dereference: true });
     },
     5,
     1000
   );
 
+  const sourceExe = path.join(ELECTRON_DIST, 'electron.exe');
+  const targetExe = path.join(target, 'electron.exe');
+  if (!fs.existsSync(targetExe)) {
+    console.log('electron.exe missing after copy, copying it directly...');
+    retrySync('copy electron.exe', () => fs.copyFileSync(sourceExe, targetExe), 5, 1000);
+  }
+  if (!fs.existsSync(targetExe)) {
+    const entries = fs.existsSync(target) ? fs.readdirSync(target).join(', ') : 'target missing';
+    throw new Error(
+      `electron.exe still missing (source exists: ${fs.existsSync(sourceExe)}); entries: ${entries}`
+    );
+  }
+
   console.log('Renaming Electron executable...');
   retrySync(
     'rename Electron executable',
     () => {
-      fs.renameSync(path.join(target, 'electron.exe'), path.join(target, `${APP_NAME}.exe`));
+      fs.renameSync(targetExe, path.join(target, `${APP_NAME}.exe`));
     },
     15,
     1000
