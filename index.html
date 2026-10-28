@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>启猴</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="stage">
+      <div id="task" class="task" hidden>
+        <div class="task-head">
+          <span class="task-dot"></span>
+          <span id="task-state" class="task-state">opencode</span>
+          <span id="task-count" class="task-count"></span>
+        </div>
+        <div id="task-title" class="task-title" hidden></div>
+        <div id="task-detail" class="task-detail" hidden></div>
+        <div class="task-bar"><i id="task-fill"></i></div>
+      </div>
+      <div id="bubble" class="bubble" hidden></div>
+      <div id="pet" class="pet">
+        <div id="flipper" class="flipper">
+          <img id="sprite" alt="启猴" draggable="false" />
+        </div>
+        <div id="effects" class="effects" aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <div id="menu" class="menu" hidden>
+      <button class="item" data-action="pet"><span>摸摸头</span></button>
+      <button class="item" data-action="feed"><span>喂巧克力</span></button>
+      <button class="item" data-action="sleep"><span id="sleep-label">睡一觉</span></button>
+      <button class="item" data-action="walk"><span>去散步</span></button>
+      <button class="item" data-action="run"><span>跑一跑</span></button>
+      <button class="item" data-action="jump"><span>跳一跳</span></button>
+      <button class="item" data-action="skate"><span>玩滑板</span></button>
+      <div class="sep"></div>
+      <div class="group">
+        <span class="group-label">大小</span>
+        <div class="chips">
+          <button class="chip" data-action="scale-small" data-scale="0.8">小</button>
+          <button class="chip" data-action="scale-medium" data-scale="1">中</button>
+          <button class="chip" data-action="scale-large" data-scale="1.25">大</button>
+        </div>
+      </div>
+      <button class="item check" data-action="toggle-ontop">
+        <span>总在最前</span><span class="mark"></span>
+      </button>
+      <div class="sep"></div>
+      <button class="item" data-action="hide"><span>隐藏到托盘</span></button>
+      <button class="item danger" data-action="quit"><span>退出</span></button>
+    </div>
+
+    <script type="module" src="renderer.js"></script>
+  </body>
+</html>
