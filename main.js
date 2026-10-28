@@ -40,6 +40,8 @@ let taskMissingSince = 0;
 let darkMode = false;
 let darkStay = false;
 let darkTimer = null;
+let loveSpamTimer = null;
+let loveSpamUntil = 0;
 let attentionTop = false;
 let attentionTimer = null;
 let walk = { targetX: 0, dir: 1, speed: 72, wa: null, endAt: 0, run: false };
@@ -83,6 +85,15 @@ const darkLines = [
   '好喜欢姐姐...',
 ];
 
+const loveSpamLines = [
+  '我爱你',
+  '我爱你我爱你',
+  '我爱你！',
+  '姐姐我爱你',
+  '我爱你……',
+  '我爱你我爱你我爱你',
+];
+
 const petLines = {
   happy: ['嘤嘤，好舒服～', '姐姐再摸摸～', '好喜欢姐姐...', '嘤嘤，今天也最喜欢姐姐。'],
   love: ['最喜欢姐姐了。', '抱抱姐姐！', '嘤嘤，想和姐姐贴贴。'],
@@ -93,6 +104,7 @@ const petLines = {
 
 const feedLines = [
   '🎵I hate it ～but I love it～🎵',
+  '🎶I used to hate blueberrys~🎶',
 ];
 const veggieLines = [
   '小虫！嘤嘤，谢谢姐姐！',
@@ -233,7 +245,7 @@ function positionInitial() {
 }
 
 function express(name, { speech = null, effect, hold = 3000, persistent = false, keepSpeech = false } = {}) {
-  const displayName = darkMode ? 'back' : name;
+  const displayName = darkMode ? (name === 'skate' ? 'skate_dark' : 'back') : name;
   const finalSpeech = darkMode && !keepSpeech && speech ? pick(darkLines) : speech;
   const finalEffect = darkMode && (effect === 'hearts' || effect === 'sparkle') ? 'dark' : effect;
   currentSprite = displayName;
@@ -266,6 +278,36 @@ function clearDark() {
   darkStay = false;
   clearTimeout(darkTimer);
   darkTimer = null;
+  stopLoveSpam();
+}
+
+function stopLoveSpam() {
+  clearTimeout(loveSpamTimer);
+  loveSpamTimer = null;
+  loveSpamUntil = 0;
+}
+
+function startLoveSpam() {
+  if (!revealed || !darkMode || mode !== 'idle' || drag.active || taskActive) return;
+  stopLoveSpam();
+  loveSpamUntil = Date.now() + 4200;
+  const step = () => {
+    if (
+      !darkMode ||
+      mode !== 'idle' ||
+      drag.active ||
+      taskActive ||
+      Date.now() > loveSpamUntil
+    ) {
+      stopLoveSpam();
+      if (darkMode) express('back', { speech: null, effect: null, hold: 0, persistent: true });
+      return;
+    }
+    send('pet:bubble', { text: pick(loveSpamLines), hold: 1500 });
+    send('pet:effect', { type: 'lovespam' });
+    loveSpamTimer = setTimeout(step, 420 + Math.random() * 220);
+  };
+  step();
 }
 
 function showLight(speech = null, effect = null, hold = 0) {
@@ -355,6 +397,8 @@ function applyTask(data) {
   const detail = typeof data.detail === 'string' ? data.detail : progress?.current || '';
   taskInfo = { state, message, task, detail, progress };
   taskActive = active;
+  writePresence();
+  if (active) stopLoveSpam();
   if (!darkStay) clearDark();
   send('pet:task', { state, message, task, detail, progress });
 
@@ -432,6 +476,7 @@ function pollTask() {
 
 function stopWalk() {
   stopSkate();
+  cancelSocialAction();
   if (mode === 'walk' || mode === 'run') {
     mode = 'idle';
     setWalking(false);
@@ -518,11 +563,17 @@ function startJump() {
 
 function finishWalk(nx, wa) {
   const wasRun = walk.run;
+  const wasSocial = !!walk.social;
   mode = 'idle';
   setWalking(false);
   win.setPosition(Math.round(nx), groundFor(wa), false);
-  if (wasRun) {
-    express('hot', { speech: pick(tiredLines), effect: 'sweat', hold: 2600 });
+  if (wasSocial) {
+    clearSocialState();
+    express('happy', { speech: pick(socialEndLines), effect: 'sparkle', hold: 2400 });
+    saveConfig();
+    scheduleBehavior();
+  } else if (wasRun) {
+    if (!walk.flee) express('hot', { speech: pick(tiredLines), effect: 'sweat', hold: 2600 });
   } else {
     express('idle', {
       speech: Math.random() < 0.3 ? '到了！' : null,
@@ -556,6 +607,9 @@ function setFacing(next) {
 function stopSkate() {
   if (mode !== 'skate') return;
   mode = 'idle';
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  win.setPosition(Math.round(b.x), Math.round(groundFor(wa)), false);
 }
 
 function startSkate() {
@@ -612,19 +666,30 @@ function startSkate() {
 
 function finishSkate() {
   if (mode !== 'skate') return;
+  const wasSocial = !!skate.social;
   mode = 'idle';
   win.setPosition(Math.round(skate.endX), skate.ground, false);
-  express('happy', {
-    speech: pick(skateEndLines),
-    effect: 'sparkle',
-    hold: 2600,
-  });
+  if (wasSocial) {
+    clearSocialState();
+    express('happy', {
+      speech: pick(socialEndLines),
+      effect: 'sparkle',
+      hold: 2400,
+    });
+  } else {
+    express('happy', {
+      speech: pick(skateEndLines),
+      effect: 'sparkle',
+      hold: 2600,
+    });
+  }
   saveConfig();
   scheduleBehavior();
 }
 
 function petClick(fromMenu = false) {
   lastUserAction = Date.now();
+  stopLoveSpam();
   scheduleBehavior();
   if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
   if (mode === 'sleep') {
@@ -785,6 +850,7 @@ function tick() {
     socialLastWrite = now;
     writePresence();
     checkSocial(now);
+    monitorSocialPartner(now);
   }
 
   if (now - lastScreenCheck > 1200) {
@@ -828,6 +894,26 @@ function tick() {
       ny = ground;
       win.setPosition(Math.round(nx), Math.round(ny), false);
       finishJump();
+    } else {
+      win.setPosition(Math.round(nx), Math.round(ny), false);
+    }
+  } else if (mode === 'hop') {
+    const b = win.getBounds();
+    const wa = workAreaForWindow();
+    const ground = groundFor(wa);
+    socialHop.vy += GRAVITY * dt;
+    const nx = clamp(b.x, wa.x, wa.x + wa.width - WIN_W);
+    const ny = b.y + socialHop.vy * dt;
+    if (ny >= ground) {
+      win.setPosition(Math.round(nx), Math.round(ground), false);
+      if (socialHop.left > 0 && Date.now() < socialHop.until - 200) {
+        socialHop.left -= 1;
+        socialHop.vy = -620 - Math.random() * 50;
+        send('pet:land', { impact: 420 });
+        send('pet:effect', { type: 'sparkle' });
+      } else {
+        finishSocialHop();
+      }
     } else {
       win.setPosition(Math.round(nx), Math.round(ny), false);
     }
@@ -898,7 +984,12 @@ function idleBehavior() {
       scheduleBehavior();
       return;
     }
-    if (currentSprite === 'skate' || (darkMode && !darkStay)) {
+    if (currentSprite === 'skate' || currentSprite === 'skate_dark' || (darkMode && !darkStay)) {
+      scheduleBehavior();
+      return;
+    }
+    if (darkMode && Math.random() < 0.35) {
+      startLoveSpam();
       scheduleBehavior();
       return;
     }
@@ -936,13 +1027,78 @@ function idleBehavior() {
 const SOCIAL_ID = 'huadong';
 const SOCIAL_NAME = '花东';
 const socialLines = {"tuxuan": ["兔玹，要一起散步吗？", "兔玹，你在忙什么？", "兔玹，一起玩吧。"], "jiuwang": ["啾汪，别闹。", "啾汪，一起玩吧。", "啾汪，你好呀。"], "default": ["一起玩吗？", "你好呀。"]};
-const socialDarkLines = {"tuxuan": ["兔玹，别靠过来。", "姐姐是我的。", "哼，你也在啊。"], "jiuwang": ["啾汪，离我远点。", "别抢姐姐。", "哼。"], "default": ["别靠过来。", "哼。"]};
+const socialDarkLines = {"tuxuan": ["兔玹，别靠过来。", "姐姐是我的。", "姐姐只能看着我一个人…", "哼，你也在啊。"], "jiuwang": ["啾汪，离我远点。", "别抢姐姐。", "姐姐只能看着我一个人…", "哼。"], "default": ["别靠过来。", "姐姐只能看着我一个人…", "哼。"]};
+const SOCIAL_START_DELAY = 1400;
+const SOCIAL_ACTIONS = ['walk', 'jump', 'skate'];
+const socialActionLines = {
+  walk: ['一起散步吧！', '我们走走看～', '一起走走～'],
+  jump: ['一起蹦蹦跳跳！', '跳起来～', '一起蹦一蹦！'],
+  skate: ['一起滑滑板吧！', '看我们的滑板！', '一起滑一段～'],
+};
+const socialJoinLines = ['好呀！', '来啦～', '等我一下！'];
+const socialEndLines = ['一起玩真开心！', '下次再一起玩～', '嘿嘿，好开心。'];
+
+function scaredSocialLine(other) {
+  const name = (other && other.name) || '它';
+  return pick([
+    `变异${name}……好可怕。`,
+    `那个${name}黑化了……`,
+    `${name}的样子不对劲，快躲开。`,
+    `呜，${name}好可怕……`,
+  ]);
+}
+
+function fleeFrom(other) {
+  if (!revealed || drag.active || mode === 'sleep' || mode === 'drag' || mode === 'fall' || mode === 'jump') return;
+  stopWalk();
+  const wa = workAreaForWindow();
+  const minX = wa.x + 4;
+  const maxX = wa.x + wa.width - WIN_W - 4;
+  if (maxX <= minX) return;
+  const b = win.getBounds();
+  const otherCenter = other.x + WIN_W / 2;
+  const myCenter = b.x + WIN_W / 2;
+  const dir = otherCenter >= myCenter ? -1 : 1;
+  const target = dir < 0 ? minX : maxX;
+  const distance = Math.abs(target - b.x);
+  if (distance < 60) {
+    express('surprised', {
+      speech: scaredSocialLine(other),
+      effect: 'exclamation',
+      hold: 2800,
+    });
+    return;
+  }
+  const duration = clamp((distance / 240) * 1000, 700, 3200);
+  walk = {
+    targetX: target,
+    dir,
+    speed: 230 + Math.random() * 60,
+    wa,
+    endAt: Date.now() + duration,
+    run: true,
+    flee: true,
+  };
+  facing = dir;
+  mode = 'run';
+  setWalking(true, dir, true);
+  express('surprised', {
+    speech: scaredSocialLine(other),
+    effect: 'sweat',
+    hold: Math.min(duration + 700, 3600),
+  });
+}
+
 let socialDir = null;
 let socialLastWrite = 0;
 let socialCooldownUntil = 0;
 let socialQuietUntil = 0;
 let socialLastAt = 0;
 let socialLastTarget = '';
+let socialAct = { action: '', start: 0, duration: 0, until: 0, dir: 1, lead: '', partner: '' };
+let socialPendingTimer = null;
+let socialJoinedKey = '';
+let socialHop = { vy: 0, ground: 0, until: 0, left: 0 };
 
 function getSocialDir() {
   if (!socialDir) {
@@ -964,10 +1120,17 @@ function writePresence() {
     h: WIN_H,
     mode,
     facing,
+    dark: isDarkNow(),
     visible: win.isVisible(),
     busy: !!taskActive,
     socialAt: socialLastAt,
     socialTarget: socialLastTarget,
+    socialAction: socialAct.action,
+    socialStart: socialAct.start,
+    socialDuration: socialAct.duration,
+    socialUntil: socialAct.until,
+    socialDir: socialAct.dir,
+    socialLead: socialAct.lead,
     updatedAt: Date.now(),
   };
   try {
@@ -975,30 +1138,326 @@ function writePresence() {
   } catch {}
 }
 
+function isDarkNow() {
+  return typeof darkMode !== 'undefined' && !!darkMode;
+}
+
+function socialClearDark() {
+  if (typeof clearDark === 'function' && typeof darkStay !== 'undefined' && !darkStay) clearDark();
+}
+
+function clearSocialState() {
+  socialAct = { action: '', start: 0, duration: 0, until: 0, dir: 1, lead: '', partner: '' };
+}
+
+function cancelSocialAction() {
+  const hadSocial = !!socialAct.action;
+  clearTimeout(socialPendingTimer);
+  socialPendingTimer = null;
+  if (hadSocial) clearSocialState();
+  if (mode === 'hop') {
+    mode = 'idle';
+    setWalking(false);
+    const wa = workAreaForWindow();
+    const b = win.getBounds();
+    win.setPosition(
+      Math.round(clamp(b.x, wa.x, wa.x + wa.width - WIN_W)),
+      Math.round(groundFor(wa)),
+      false
+    );
+  }
+  if (hadSocial) writePresence();
+}
+
+function pickSocialAction() {
+  const r = Math.random();
+  if (r < 0.4) return 'walk';
+  if (r < 0.7) return 'jump';
+  return 'skate';
+}
+
+function roomDir(wa, x) {
+  const right = wa.x + wa.width - WIN_W - x;
+  const left = x - wa.x;
+  if (right < 140 && left > right) return -1;
+  if (left < 140 && right > left) return 1;
+  return Math.random() < 0.5 ? 1 : -1;
+}
+
+function isJoinableSession(data, now) {
+  if (!data || !SOCIAL_ACTIONS.includes(data.socialAction)) return false;
+  if (data.socialLead !== data.id || data.socialTarget !== SOCIAL_ID) return false;
+  if (!Number.isFinite(data.socialStart) || !Number.isFinite(data.socialUntil)) return false;
+  if (now >= Number(data.socialUntil)) return false;
+  if (now < Number(data.socialStart) - 5000) return false;
+  return true;
+}
+
+function monitorSocialPartner(now) {
+  if (!socialAct.action || !socialAct.partner) return;
+  if (now < socialAct.start - 1000) return;
+  const started = mode === 'walk' || mode === 'run' || mode === 'hop' || mode === 'skate';
+  const abort = () => {
+    if (started) stopWalk();
+    else cancelSocialAction();
+  };
+  if (!started && now >= socialAct.start + 1200) {
+    abort();
+    return;
+  }
+  let raw;
+  try {
+    raw = fs.readFileSync(
+      path.join(getSocialDir(), `social-${socialAct.partner}.json`),
+      'utf8'
+    );
+  } catch {
+    abort();
+    return;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (!data || data.id !== socialAct.partner || data.visible === false || data.busy) {
+    abort();
+    return;
+  }
+  if (now - Number(data.updatedAt) > 3500) {
+    abort();
+    return;
+  }
+  if (data.mode === 'sleep' || data.mode === 'drag' || data.mode === 'fall') {
+    abort();
+    return;
+  }
+  if ((started || now >= socialAct.start - 300) && data.socialAction !== socialAct.action) abort();
+}
+
 function socialInteract(other, now) {
   const me = win.getBounds();
   const dir = other.x + WIN_W / 2 > me.x + WIN_W / 2 ? 1 : -1;
   setFacing(dir);
   socialCooldownUntil = now + 30000 + Math.random() * 30000;
-  socialQuietUntil = now + 4200;
   socialLastAt = now;
   socialLastTarget = other.id || '';
-  const isDark = typeof darkMode !== 'undefined' && darkMode;
-  const lines = isDark
-    ? socialDarkLines[other.id] || socialDarkLines.default
-    : socialLines[other.id] || socialLines.default;
-  const speech = pick(lines);
-  if (isDark) {
-    express('back', { speech, effect: 'dark', hold: 3400, keepSpeech: true });
-  } else {
-    const expr = pick(['happy', 'wave', 'love']);
-    express(expr, { speech, effect: expr === 'love' ? 'hearts' : 'sparkle', hold: 3400 });
+
+  if (isDarkNow()) {
+    socialQuietUntil = now + 4200;
+    const lines = socialDarkLines[other.id] || socialDarkLines.default || ['哼。'];
+    express('back', { speech: pick(lines), effect: 'dark', hold: 3400, keepSpeech: true });
+    return;
   }
+
+  if (other.dark) {
+    socialCooldownUntil = now + 15000 + Math.random() * 15000;
+    socialQuietUntil = now + 3200;
+    socialLastAt = now;
+    socialLastTarget = other.id || '';
+    fleeFrom(other);
+    return;
+  }
+
+  const action = pickSocialAction();
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  const actionDir = action === 'jump' ? dir : roomDir(wa, b.x);
+  const duration =
+    action === 'walk'
+      ? 5200 + Math.random() * 2600
+      : action === 'jump'
+        ? 3400
+        : 3000 + Math.random() * 1200;
+  const start = now + SOCIAL_START_DELAY;
+  const until = start + duration + 1600;
+
+  socialAct = {
+    action,
+    start,
+    duration,
+    until,
+    dir: actionDir,
+    lead: SOCIAL_ID,
+    partner: other.id || '',
+  };
+  socialQuietUntil = until + 1000;
+  socialJoinedKey = `${SOCIAL_ID}:${start}`;
+  writePresence();
+  scheduleSocialAction(socialAct);
+  express('happy', {
+    speech: pick(socialActionLines[action] || socialJoinLines),
+    effect: 'sparkle',
+    hold: 1300,
+  });
+}
+
+function joinSocialAction(other, now) {
+  const key = `${other.id}:${other.socialStart}`;
+  if (socialJoinedKey === key) return;
+
+  if (other.dark) {
+    socialJoinedKey = key;
+    socialCooldownUntil = now + 15000 + Math.random() * 15000;
+    socialQuietUntil = now + 3200;
+    fleeFrom(other);
+    return;
+  }
+
+  clearTimeout(socialPendingTimer);
+  socialPendingTimer = null;
+
+  const rawStart = Number(other.socialStart) || now;
+  const rawDuration = clamp(Number(other.socialDuration) || 4000, 600, 12000);
+  const elapsed = Math.max(0, now - rawStart);
+  const start = Math.max(now, rawStart);
+  const duration = Math.max(700, rawDuration - elapsed);
+  const until = Math.max(Number(other.socialUntil) || 0, start + duration + 1200);
+
+  socialAct = {
+    action: other.socialAction,
+    start,
+    duration,
+    until,
+    dir: Number(other.socialDir) < 0 ? -1 : 1,
+    lead: other.id,
+    partner: other.id,
+  };
+  socialJoinedKey = key;
+  socialCooldownUntil = now + 30000 + Math.random() * 30000;
+  socialQuietUntil = until + 1000;
+  socialLastAt = now;
+  socialLastTarget = other.id || '';
+  writePresence();
+  scheduleSocialAction(socialAct);
+  express('happy', { speech: pick(socialJoinLines), effect: 'sparkle', hold: 1300 });
+}
+
+function scheduleSocialAction(session) {
+  clearTimeout(socialPendingTimer);
+  socialPendingTimer = setTimeout(
+    () => runSocialAction(session),
+    Math.max(0, session.start - Date.now())
+  );
+}
+
+function runSocialAction(session) {
+  socialPendingTimer = null;
+  if (!win || win.isDestroyed() || !win.isVisible()) {
+    clearSocialState();
+    return;
+  }
+  if (drag.active || mode !== 'idle' || taskActive) {
+    clearSocialState();
+    return;
+  }
+  socialClearDark();
+  clearTimeout(exprTimer);
+  exprTimer = null;
+
+  if (session.action === 'walk') {
+    const wa = workAreaForWindow();
+    const b = win.getBounds();
+    const minX = wa.x;
+    const maxX = wa.x + wa.width - WIN_W;
+    if (maxX <= minX) {
+      clearSocialState();
+      return;
+    }
+    walk = {
+      targetX: clamp(b.x + session.dir * 3000, minX, maxX),
+      dir: session.dir,
+      speed: 76,
+      wa,
+      endAt: session.start + session.duration,
+      run: false,
+      social: true,
+    };
+    facing = session.dir;
+    mode = 'walk';
+    win.setPosition(Math.round(clamp(b.x, minX, maxX)), groundFor(wa), false);
+    setWalking(true, session.dir, false);
+    send('pet:effect', { type: 'sparkle' });
+    return;
+  }
+
+  if (session.action === 'jump') {
+    const wa = workAreaForWindow();
+    const ground = groundFor(wa);
+    const b = win.getBounds();
+    if (b.y !== ground) win.setPosition(b.x, ground, false);
+    setFacing(session.dir);
+    socialHop = {
+      vy: -640,
+      ground,
+      until: session.start + session.duration,
+      left: Math.max(2, Math.round(session.duration / 650)) - 1,
+    };
+    mode = 'hop';
+    setWalking(false);
+    send('pet:effect', { type: 'sparkle' });
+    return;
+  }
+
+  if (session.action === 'skate') {
+    const wa = workAreaForWindow();
+    const b = win.getBounds();
+    const minX = wa.x;
+    const maxX = wa.x + wa.width - WIN_W;
+    const ground = groundFor(wa);
+    const room = session.dir > 0 ? maxX - b.x : b.x - minX;
+    if (room < 60) {
+      runSocialAction({ ...session, action: 'jump' });
+      return;
+    }
+    const duration = clamp(session.duration, 1200, 9000);
+    const distance = Math.max(40, Math.min(room, (duration / 1000) * 175));
+    const hopDuration = clamp(duration * 0.22, 520, 760);
+    const hopAt = clamp(duration * 0.36, 200, duration - hopDuration - 80);
+    skate = {
+      startX: b.x,
+      endX: clamp(b.x + session.dir * distance, minX, maxX),
+      dir: session.dir,
+      startedAt: session.start,
+      duration,
+      ground,
+      hopStart: session.start + hopAt,
+      hopDuration,
+      hopDone: false,
+      hopEnded: false,
+      social: true,
+    };
+    mode = 'skate';
+    setFacing(session.dir);
+    win.setPosition(Math.round(b.x), ground, false);
+    express('skate', { speech: null, effect: null, hold: 0, persistent: true });
+    return;
+  }
+
+  clearSocialState();
+}
+
+function finishSocialHop() {
+  mode = 'idle';
+  setWalking(false);
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  win.setPosition(
+    Math.round(clamp(b.x, wa.x, wa.x + wa.width - WIN_W)),
+    Math.round(groundFor(wa)),
+    false
+  );
+  send('pet:land', { impact: 420 });
+  express('happy', { speech: pick(socialEndLines), effect: 'sparkle', hold: 2400 });
+  clearSocialState();
+  saveConfig();
+  scheduleBehavior();
 }
 
 function checkSocial(now) {
   if (!revealed || !win || win.isDestroyed() || !win.isVisible()) return;
-  if (drag.active || mode !== 'idle' || taskActive || now < socialCooldownUntil) return;
+  if (drag.active || mode !== 'idle' || taskActive) return;
   let files;
   try {
     files = fs.readdirSync(getSocialDir());
@@ -1030,6 +1489,23 @@ function checkSocial(now) {
     const dx = Math.abs(data.x + WIN_W / 2 - (me.x + WIN_W / 2));
     const dy = Math.abs(data.y + WIN_H - (me.y + WIN_H));
     if (dx < 360 && dy < 80) {
+      if (data.dark && !isDarkNow()) {
+        if (socialAct.action && now < socialAct.until) continue;
+        if (now < socialCooldownUntil) continue;
+        socialCooldownUntil = now + 15000 + Math.random() * 15000;
+        socialQuietUntil = now + 3200;
+        socialLastAt = now;
+        socialLastTarget = data.id || '';
+        fleeFrom(data);
+        return;
+      }
+      if (!isDarkNow() && isJoinableSession(data, now) && data.id < SOCIAL_ID) {
+        joinSocialAction(data, now);
+        return;
+      }
+      if (socialAct.action && now < socialAct.until) continue;
+      if (now < socialCooldownUntil) continue;
+      if (!(SOCIAL_ID < data.id)) continue;
       socialInteract(data, now);
       return;
     }
@@ -1276,6 +1752,7 @@ function createTray() {
 }
 
 function handleAction(action) {
+  stopLoveSpam();
   switch (action) {
     case 'pet':
       ensureVisible();
@@ -1408,7 +1885,15 @@ function reveal() {
       if ((slept > 30000 && cfg.energy >= 99) || slept > 240000) wake();
     } else {
       cfg.energy = Math.max(0, cfg.energy - 0.03);
-      if (cfg.energy <= 15 && mode === 'idle' && !taskActive && currentSprite !== 'skate') goSleep(true);
+      if (
+        cfg.energy <= 15 &&
+        mode === 'idle' &&
+        !taskActive &&
+        currentSprite !== 'skate' &&
+        currentSprite !== 'skate_dark'
+      ) {
+        goSleep(true);
+      }
     }
   }, 1000);
   taskPollTimer = setInterval(pollTask, 600);

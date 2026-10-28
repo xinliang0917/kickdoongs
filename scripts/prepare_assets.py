@@ -18,7 +18,7 @@ NAMES = [
     "idle", "sleepy", "happy", "hot",
     "giggle", "snack", "bored", "confused",
     "love", "shy", "wave", "goodnight",
-    "angry", "back", "surprised", "cuddle", "skate",
+    "angry", "back", "surprised", "cuddle", "skate", "skate_dark",
 ]
 
 EYE_LINE = (24, 24, 24, 255)
@@ -308,6 +308,35 @@ def blueberry(im):
     draw.polygon(crown, fill=(30, 38, 76, 255))
 
 
+def darken_skate(im):
+    a = np.array(im.convert("RGBA")).astype(np.float32)
+    rgb = a[:, :, :3]
+    alpha = a[:, :, 3]
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    rows = np.arange(a.shape[0])[:, None]
+    green = (g > r + 20) & (g > b + 15) & (g > 120) & (alpha > 30)
+    pink = (r > 190) & (r > g + 30) & (b > g + 5) & (alpha > 30)
+    shirt = pink & (rows > 240)
+
+    shade = np.clip(6.0 + (g - 190.0) * 0.30, 4.0, 26.0)
+    out = rgb.copy()
+    out[green] = np.stack([shade[green], shade[green], shade[green]], axis=1)
+
+    lum = 0.299 * r + 0.587 * g + 0.114 * b
+    shirt_shade = np.clip(lum * 0.80, 0.0, 255.0)
+    out[shirt] = np.stack(
+        [
+            np.clip(shirt_shade[shirt] + 10, 0, 255),
+            shirt_shade[shirt],
+            shirt_shade[shirt],
+        ],
+        axis=1,
+    )
+
+    a[:, :, :3] = np.clip(np.round(out), 0, 255).astype(np.uint8)
+    return Image.fromarray(a.astype(np.uint8))
+
+
 def save(im, name, previews):
     path = os.path.join(OUT, name + ".png")
     im.save(path)
@@ -387,6 +416,7 @@ def main():
 
     skate = Image.fromarray(add_outer_outline(faces["br"]))
     save(skate, "skate", images)
+    save(darken_skate(skate), "skate_dark", images)
 
     save_icon(Image.fromarray(faces["tl"]))
 

@@ -441,6 +441,33 @@ body {
   animation: sweatDrop 1.4s ease-in forwards;
 }
 
+.fx.loveword {
+  color: #ff5c8a;
+  font-size: 15px;
+  text-shadow: 0 1px 0 #fff, 0 0 4px rgba(255, 105, 145, 0.9);
+  white-space: nowrap;
+  animation: loveSpam 2.4s ease-out forwards;
+}
+
+@keyframes loveSpam {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.06);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-46px) scale(1.1);
+  }
+}
+
 .fx.land {
   left: 50%;
   top: 78%;

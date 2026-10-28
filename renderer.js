@@ -2,7 +2,7 @@
   'idle', 'sleepy', 'happy', 'hot',
   'giggle', 'snack', 'bored', 'confused',
   'love', 'shy', 'wave', 'goodnight',
-  'angry', 'back', 'surprised', 'cuddle', 'skate',
+  'angry', 'back', 'surprised', 'cuddle', 'skate', 'skate_dark',
 ];
 
 const BASE_HEIGHT = 0.315;
@@ -54,6 +54,7 @@ const defaultEffects = {
   back: 'dark',
   hot: 'sweat',
   skate: 'sparkle',
+  skate_dark: 'sparkle',
 };
 
 function clamp(v, lo, hi) {
@@ -94,7 +95,7 @@ function playTurn() {
 }
 
 function isDarkSprite(name) {
-  return name === 'back' || name === 'angry';
+  return name === 'back' || name === 'angry' || name === 'skate_dark';
 }
 
 function setSprite(name) {
@@ -112,7 +113,7 @@ function setSprite(name) {
 }
 
 function startKickflip(duration) {
-  if (currentName !== 'skate') return;
+  if (currentName !== 'skate' && currentName !== 'skate_dark') return;
   const ms = clamp(Number(duration) || 760, 420, 1100);
   pet.style.setProperty('--flip-duration', `${ms}ms`);
   pet.classList.remove('kickflip');
@@ -244,6 +245,20 @@ function setEffect(type, persistent) {
     fxTimer = setTimeout(() => {
       if (effects.dataset.type === 'veggies') effects.innerHTML = '';
     }, 2500);
+    return;
+  }
+
+  if (type === 'lovespam') {
+    for (let i = 0; i < 14; i += 1) {
+      const word = makeFx('loveword', '我爱你');
+      word.style.left = `${4 + Math.random() * 76}%`;
+      word.style.top = `${6 + Math.random() * 64}%`;
+      word.style.fontSize = `${11 + Math.random() * 9}px`;
+      word.style.animationDelay = `${Math.random() * 1.1}s`;
+    }
+    fxTimer = setTimeout(() => {
+      if (effects.dataset.type === 'lovespam') effects.innerHTML = '';
+    }, 3600);
     return;
   }
 
