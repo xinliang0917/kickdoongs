@@ -2229,7 +2229,7 @@ function buildTrayMenu() {
     { type: 'separator' },
     { label: '摸摸头', click: () => { ensureVisible(); petClick(true); } },
     { label: '喂麻婆豆腐', click: feed },
-    { label: '给姐姐充电', click: startChargeUser },
+    { label: '充个电', click: startChargeUser },
     { label: mode === 'sleep' ? '叫醒它' : '睡一觉', click: toggleSleep },
     { label: '去散步', click: () => { ensureVisible(); startWalk(); } },
     { label: '跑一跑', click: () => { ensureVisible(); startRun(); } },
