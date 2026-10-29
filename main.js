@@ -1179,7 +1179,7 @@ const socialLines = {
 };
 const socialDarkLines = {};
 const SOCIAL_START_DELAY = 1400;
-const SOCIAL_ACTIONS = ['walk', 'jump', 'skate', 'greet', 'name'];
+const SOCIAL_ACTIONS = ['walk', 'jump', 'skate', 'greet', 'name', 'charge'];
 const socialActionLines = {
   walk: ['一起散步吧！', '姐姐看，呜旻交到朋友啦～', '一起走走～'],
   jump: ['一起蹦蹦跳跳！', '跳起来～wool！wool！', '一起蹦一蹦！'],
@@ -1382,7 +1382,7 @@ function separateFrom(other) {
 }
 
 function isJoinableSession(data, now) {
-  if (!data || !['greet', 'name'].includes(data.socialAction)) return false;
+  if (!data || !['greet', 'name', 'charge'].includes(data.socialAction)) return false;
   if (data.socialLead !== data.id || data.socialTarget !== SOCIAL_ID) return false;
   if (!Number.isFinite(data.socialStart) || !Number.isFinite(data.socialUntil)) return false;
   if (now >= Number(data.socialUntil)) return false;
@@ -1656,6 +1656,25 @@ function runSocialAction(session) {
     return;
   }
 
+  if (session.action === 'charge') {
+    express('happy', {
+      speech: '充电中～好舒服',
+      effect: 'sparkle',
+      hold: Math.max(1800, Math.min(3200, session.duration)),
+    });
+    clearTimeout(socialEndTimer);
+    socialEndTimer = setTimeout(() => {
+      socialEndTimer = null;
+      if (socialAct.action === 'charge' && socialAct.start === session.start) {
+        express('happy', { speech: '充满啦～', effect: 'hearts', hold: 2400 });
+        clearSocialState();
+        writePresence();
+        scheduleBehavior();
+      }
+    }, Math.max(0, session.until - Date.now()) + 60);
+    return;
+  }
+
   if (session.action !== 'greet' && session.action !== 'name') {
     clearSocialState();
     return;
@@ -1753,7 +1772,7 @@ function checkSocial(now) {
         fleeFrom(data);
         return;
       }
-      if (!isDarkNow() && isJoinableSession(data, now) && data.id < SOCIAL_ID) {
+      if (!isDarkNow() && isJoinableSession(data, now) && (data.id < SOCIAL_ID || data.socialAction === 'charge')) {
         joinSocialAction(data, now);
         return;
       }
