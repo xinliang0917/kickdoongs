@@ -1825,8 +1825,7 @@ function spriteAlpha(name) {
 
 function pointOverPet(px, py) {
   const info = spriteAlpha(currentSprite);
-  if (!info) return false;
-  const meta = PET_MANIFEST[currentSprite] || PET_MANIFEST.idle || info;
+  const meta = PET_MANIFEST[currentSprite] || PET_MANIFEST.idle || info || { w: 453, h: 514 };
   const factor = SPRITE_SCALE[currentSprite] || 1;
   const w = meta.w * BASE_HEIGHT * cfg.scale * factor;
   const h = meta.h * BASE_HEIGHT * cfg.scale * factor;
@@ -1835,6 +1834,14 @@ function pointOverPet(px, py) {
   if (px < left - 2 || px > left + w + 2 || py < top - 2 || py > top + h + 2) {
     return false;
   }
+  const cx = left + w / 2;
+  const cy = top + h / 2;
+  const inCenter =
+    px >= cx - w * 0.3 &&
+    px <= cx + w * 0.3 &&
+    py >= cy - h * 0.3 &&
+    py <= cy + h * 0.3;
+  if (!info) return inCenter;
   let nx = (px - left) / w;
   const ny = (py - top) / h;
   if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return false;
@@ -1850,7 +1857,7 @@ function pointOverPet(px, py) {
       maxAlpha = Math.max(maxAlpha, info.data[(ay * info.w + ax) * 4 + 3]);
     }
   }
-  return maxAlpha > 18;
+  return maxAlpha > 18 || inCenter;
 }
 
 function pointInBubble(px, py) {
@@ -2136,6 +2143,11 @@ function reveal() {
   lastTick = Date.now();
   loopTimer = setInterval(tick, 16);
   energyTimer = setInterval(() => {
+    if (revealed && win && !win.isDestroyed() && Date.now() - lastTick > 3000) {
+      clearInterval(loopTimer);
+      lastTick = Date.now();
+      loopTimer = setInterval(tick, 16);
+    }
     if (mode === 'sleep') {
       cfg.energy = Math.min(100, cfg.energy + 1.6);
       const slept = Date.now() - sleepSince;

@@ -332,24 +332,10 @@ function closeMenu() {
 function detachDragListeners() {
   window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerup', onPointerUp);
-  window.removeEventListener('pointercancel', onPointerUp);
+  window.removeEventListener('pointercancel', onPointerCancel);
 }
 
-function onPointerMove(e) {
-  if (!down) return;
-  if (!dragging) {
-    const dist = Math.hypot(e.screenX - down.startX, e.screenY - down.startY);
-    if (dist < 10) return;
-    dragging = true;
-    closeMenu();
-    hideBubble();
-    pet.classList.add('dragging');
-    window.pet.dragStart({ offsetX: down.offsetX, offsetY: down.offsetY });
-  }
-  window.pet.dragMove({ x: e.screenX, y: e.screenY });
-}
-
-function onPointerUp(e) {
+function endPointer(notify) {
   if (!down) return;
   const wasDragging = dragging;
   const id = down.id;
@@ -364,14 +350,40 @@ function onPointerUp(e) {
   pet.classList.remove('dragging');
   if (wasDragging) {
     window.pet.dragEnd();
-  } else {
+  } else if (notify === 'click') {
     window.pet.click();
   }
 }
 
+function onPointerUp() {
+  endPointer('click');
+}
+
+function onPointerCancel() {
+  endPointer('abort');
+}
+
+function onPointerMove(e) {
+  if (!down) return;
+  if (e.buttons === 0) {
+    endPointer('abort');
+    return;
+  }
+  if (!dragging) {
+    const dist = Math.hypot(e.screenX - down.startX, e.screenY - down.startY);
+    if (dist < 10) return;
+    dragging = true;
+    closeMenu();
+    hideBubble();
+    pet.classList.add('dragging');
+    window.pet.dragStart({ offsetX: down.offsetX, offsetY: down.offsetY });
+  }
+  window.pet.dragMove({ x: e.screenX, y: e.screenY });
+}
+
 function onPetPointerDown(e) {
   if (e.button !== 0) return;
-  if (down) return;
+  if (down) endPointer('abort');
   e.preventDefault();
   closeMenu();
   down = {
@@ -388,7 +400,7 @@ function onPetPointerDown(e) {
   }
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
-  window.addEventListener('pointercancel', onPointerUp);
+  window.addEventListener('pointercancel', onPointerCancel);
 }
 
 function setupEvents() {
@@ -397,6 +409,11 @@ function setupEvents() {
   }, true);
 
   pet.addEventListener('pointerdown', onPetPointerDown);
+  sprite.addEventListener('lostpointercapture', onPointerCancel);
+  window.addEventListener('blur', onPointerCancel);
+  window.addEventListener('mouseup', (e) => {
+    if (down && e.buttons === 0) onPointerUp();
+  });
 
   pet.addEventListener('contextmenu', (e) => {
     e.preventDefault();
