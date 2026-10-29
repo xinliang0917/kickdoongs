@@ -1,8 +1,9 @@
-﻿{
-  "name": "blue-panda-pet",
+{
+  "name": "miaoyao-pet",
+  "productName": "喵鳐",
   "version": "1.0.0",
   "private": true,
-  "description": "An interactive desktop pet built from a sticker sheet.",
+  "description": "喵鳐 · 会充电的桌面宠物",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -12,3 +13,4 @@
     "electron": "^45.0.0"
   }
 }
+
