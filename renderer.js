@@ -26,11 +26,11 @@ const BASE_HEIGHT = 0.36;
 const sprite = document.getElementById('sprite');
 const flipper = document.getElementById('flipper');
 const pet = document.getElementById('pet');
+const blocksEl = document.getElementById('blocks');
 const bubble = document.getElementById('bubble');
 const effects = document.getElementById('effects');
 const menu = document.getElementById('menu');
 const sleepLabel = document.getElementById('sleep-label');
-const controller = document.getElementById('controller');
 const taskEl = document.getElementById('task');
 const taskStateEl = document.getElementById('task-state');
 const taskCountEl = document.getElementById('task-count');
@@ -48,6 +48,8 @@ let currentName = 'idle';
 let spriteMeta = null;
 let userScale = 1;
 let onTop = true;
+let blocksOn = false;
+let lastBlockLayout = -1;
 let dir = 1;
 let sleeping = false;
 let menuOpen = false;
@@ -129,6 +131,7 @@ function setSprite(name) {
   pet.style.removeProperty('--flip-duration');
   sprite.src = image.src;
   sprite.classList.toggle('skating', currentName === 'skate');
+  if (blocksEl) blocksEl.classList.toggle('skating', currentName === 'skate');
   applyDir();
   applyScale();
   bump();
@@ -329,11 +332,80 @@ function spawnDust(impact) {
   }
 }
 
+const BLOCK_PALETTE = ['#a9c9ee', '#ffd7e6', '#ffe6a7', '#bfe6c8', '#cbbcf2'];
+
+const BLOCK_LAYOUTS = [
+  [
+    { x: 17, y: 39, c: 0 }, { x: 41, y: 39, c: 1 }, { x: 65, y: 39, c: 2 },
+    { x: 29, y: 22, c: 3 }, { x: 53, y: 22, c: 4 },
+    { x: 41, y: 5, c: 0 },
+  ],
+  [
+    { x: 10, y: 39, c: 0 }, { x: 34, y: 39, c: 1 }, { x: 58, y: 39, c: 2 },
+    { x: 10, y: 22, c: 1 }, { x: 34, y: 22, c: 2 },
+    { x: 10, y: 5, c: 3 },
+  ],
+  [
+    { x: 12, y: 39, c: 3 }, { x: 70, y: 39, c: 4 },
+    { x: 12, y: 22, c: 3 }, { x: 70, y: 22, c: 4 },
+    { x: 12, y: 5, c: 0 }, { x: 36, y: 5, c: 1 }, { x: 60, y: 5, c: 2 },
+  ],
+  [
+    { x: 17, y: 39, c: 0 }, { x: 41, y: 39, c: 1 }, { x: 65, y: 39, c: 2 },
+    { x: 17, y: 22, c: 3 }, { x: 41, y: 22, c: 4 }, { x: 65, y: 22, c: 0 },
+    { x: 29, y: 5, c: 1 }, { x: 53, y: 5, c: 2 },
+  ],
+  [
+    { x: 5, y: 39, c: 0, r: -2 }, { x: 29, y: 39, c: 1, r: 1 },
+    { x: 53, y: 39, c: 2, r: -1 }, { x: 77, y: 39, c: 3, r: 2 },
+    { x: 41, y: 22, c: 4, r: 3 },
+  ],
+  [
+    { x: 5, y: 39, c: 0 }, { x: 29, y: 39, c: 1 }, { x: 53, y: 39, c: 2 }, { x: 77, y: 39, c: 3 },
+    { x: 5, y: 22, c: 4 }, { x: 29, y: 22, c: 0 }, { x: 53, y: 22, c: 1 }, { x: 77, y: 22, c: 2 },
+    { x: 41, y: 5, c: 3 },
+  ],
+];
+
+function renderBlocks() {
+  if (!blocksEl) return;
+  let index = Math.floor(Math.random() * BLOCK_LAYOUTS.length);
+  if (BLOCK_LAYOUTS.length > 1 && index === lastBlockLayout) {
+    index = (index + 1 + Math.floor(Math.random() * (BLOCK_LAYOUTS.length - 1))) % BLOCK_LAYOUTS.length;
+  }
+  lastBlockLayout = index;
+  const shift = Math.floor(Math.random() * BLOCK_PALETTE.length);
+  blocksEl.textContent = '';
+  BLOCK_LAYOUTS[index].forEach((brick, i) => {
+    const el = document.createElement('span');
+    el.className = 'brick';
+    el.style.left = `${brick.x}px`;
+    el.style.top = `${brick.y}px`;
+    el.style.background = BLOCK_PALETTE[(brick.c + shift) % BLOCK_PALETTE.length];
+    if (brick.r) el.style.setProperty('--rot', `${brick.r}deg`);
+    el.style.animationDelay = `${i * 45}ms`;
+    blocksEl.appendChild(el);
+  });
+}
+
+function setBlocksVisible(on) {
+  blocksOn = !!on;
+  if (!blocksEl) return;
+  if (blocksOn) {
+    renderBlocks();
+    blocksEl.classList.add('show');
+  } else {
+    blocksEl.classList.remove('show');
+  }
+}
+
 function updateMenuState() {
   if (sleepLabel) sleepLabel.textContent = sleeping ? '叫醒呜旻' : '睡一觉';
   if (snowLabel) snowLabel.textContent = winter ? '收起这场雪' : '下一场雪';
   const check = menu.querySelector('[data-action="toggle-ontop"]');
   if (check) check.classList.toggle('checked', onTop);
+  const blocksCheck = menu.querySelector('[data-action="toggle-blocks"]');
+  if (blocksCheck) blocksCheck.classList.toggle('checked', blocksOn);
   menu.querySelectorAll('.chip').forEach((chip) => {
     const value = Number(chip.dataset.scale);
     chip.classList.toggle('active', Math.abs(value - userScale) < 0.01);
@@ -595,8 +667,17 @@ function setupEvents() {
     updateMenuState();
   });
 
-  window.pet.onGame((data) => {
-    setGaming(data && data.on);
+  window.pet.onBlocks((data) => {
+    setBlocksVisible(data && data.on);
+    updateMenuState();
+  });
+
+  window.pet.onPeek((data) => {
+    const on = !!(data && data.on);
+    const side = Number(data && data.side) < 0 ? 'left' : 'right';
+    document.body.classList.toggle('peek', on);
+    document.body.classList.toggle('peek-left', on && side === 'left');
+    document.body.classList.toggle('peek-right', on && side === 'right');
   });
 
   window.pet.onTask((data) => {
