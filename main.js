@@ -1933,7 +1933,7 @@ function pointOverPet(px, py) {
   let nx = (px - left) / w;
   const ny = (py - top) / h;
   if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return false;
-  const mirrored = facing < 0;
+  const mirrored = currentSprite === 'skate' ? facing > 0 : facing < 0;
   if (mirrored) nx = 1 - nx;
   const ix = clamp(Math.floor(nx * info.w), 0, info.w - 1);
   const iy = clamp(Math.floor(ny * info.h), 0, info.h - 1);
