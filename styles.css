@@ -251,7 +251,6 @@ body {
   cursor: grab;
   transform-origin: 50% 100%;
   animation: breathe 5.2s ease-in-out infinite;
-  transition: left 0.38s cubic-bezier(0.2, 1.3, 0.4, 1), opacity 0.3s ease;
   will-change: transform;
 }
 
@@ -328,10 +327,14 @@ body {
 }
 
 body.peek-right .pet {
+  left: 50%;
+  transition: none;
   animation: peekSwayRight 4.8s ease-in-out infinite;
 }
 
 body.peek-left .pet {
+  left: -50%;
+  transition: none;
   animation: peekSwayLeft 4.8s ease-in-out infinite;
 }
 
