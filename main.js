@@ -879,11 +879,6 @@ function tick() {
   if (!drag.active && mode === 'drag') mode = 'idle';
   if (drag.active || mode === 'drag') return;
 
-  if (now - lastPeekCheck > 900) {
-    lastPeekCheck = now;
-    checkPeekIdle();
-  }
-
   if (glide) {
     if (!Number.isFinite(glide.duration) || now - glide.t0 > glide.duration + 1500) {
       finishGlide();
