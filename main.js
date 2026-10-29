@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, powerMonitor } = require('electron');
+﻿const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -496,13 +496,16 @@ function enterPeek() {
     wa.y + wa.height - WIN_H - 8
   );
 
+  const px = Math.round(x);
+  const py = Math.round(y);
+  if (!Number.isFinite(px) || !Number.isFinite(py)) return;
   peek = { side, restoreX: b.x, wa, enteredAt: Date.now() };
   mode = 'peek';
   setFacing(side > 0 ? -1 : 1);
   setWalking(false);
   send('pet:peek', { on: true, side });
   express('bored', { speech: null, effect: 'zzz', hold: 6000, persistent: true });
-  win.setPosition(x, y, false);
+  win.setPosition(px, py, false);
   writePresence();
 }
 
@@ -1070,11 +1073,6 @@ function tick() {
   if (!drag.active && mode === 'drag') mode = 'idle';
   if (drag.active || mode === 'drag') return;
 
-  if (now - lastPeekCheck > 900) {
-    lastPeekCheck = now;
-    checkPeekIdle();
-  }
-
   if (glide) {
     if (!Number.isFinite(glide.duration) || now - glide.t0 > glide.duration + 1500) {
       finishGlide();
@@ -1247,8 +1245,6 @@ function idleBehavior() {
       startJump();
     } else if (r < 0.31) {
       startSkate();
-    } else if (r < 0.36) {
-      startHide();
     } else if (r < 0.43) {
       playGame();
     } else if (r < 0.53) {
