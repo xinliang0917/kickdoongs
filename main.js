@@ -5,21 +5,43 @@ const fs = require('node:fs');
 const WIN_W = 360;
 const WIN_H = 460;
 const GRAVITY = 2200;
-const BASE_HEIGHT = 0.6;
+const BASE_HEIGHT = 0.36;
 const PET_MANIFEST = JSON.parse(
   fs.readFileSync(path.join(__dirname, 'assets', 'pet', 'manifest.json'), 'utf8')
 );
-app.setName('兔玹');
+app.setName('呜旻');
+
+const SPRITE_FILE = {
+  idle: 'idle',
+  stand: 'idle',
+  happy: 'idle',
+  love: 'idle',
+  giggle: 'idle',
+  wave: 'idle',
+  cuddle: 'idle',
+  shy: 'idle',
+  choco: 'idle',
+  confused: 'dizzy',
+  angry: 'dizzy',
+  surprised: 'dizzy',
+  hot: 'dizzy',
+  unhappy: 'dizzy',
+  bored: 'sleepy',
+  sleepy: 'sleepy',
+  goodnight: 'goodnight',
+  skate: 'skate',
+};
 
 let win = null;
 let tray = null;
 let mode = 'idle';
-let cfg = { x: null, scale: 1, energy: 82, onTop: true };
+let cfg = { x: null, scale: 1, energy: 82, onTop: true, winter: false, firstRun: true, blocksBest: 0 };
 let loopTimer = null;
 let behaviorTimer = null;
 let exprTimer = null;
 let energyTimer = null;
 let lastTick = Date.now();
+let lastScreenCheck = 0;
 let sleepSince = 0;
 let lastUserAction = Date.now();
 let clickTimes = [];
@@ -56,44 +78,77 @@ let skate = {
 let drag = { active: false, offsetX: 0, offsetY: 0, samples: [] };
 const alphaCache = new Map();
 
+let blocksWin = null;
+
+function spriteFile(name) {
+  return SPRITE_FILE[name] || name;
+}
+
 const idleLines = [
-  '姐姐，今天也一起摸鱼吧。',
-  '姐姐在忙什么呀？',
-  '姐姐要不要休息一下？',
-  '我在这儿陪姐姐。',
-  '姐姐，桌面好大，我想出去转转。',
-  '姐姐，今天有蔬菜吗？',
+  '姐姐，今天也要开心呀。',
+  '呜旻把桌面巡逻了一圈，没有发现坏东西。',
+  '姐姐在忙什么？呜旻可以安静地陪着。',
+  '冬天什么时候来呀？呜旻想堆一只雪狼。',
+  '姐姐，休息一下眼睛吧，呜旻帮你看着时间。',
+  '呜旻的尾巴是天线，能收到姐姐的好心情！',
+  '要不要一起搭积木？呜旻已经想好图纸啦。',
+  '肉肉……姐姐，呜旻没有在流口水，真的。',
+  '桌面这么大，呜旻最喜欢待的地方还是姐姐旁边。',
+  '姐姐如果需要人陪，呜旻会一直在线的。',
+  '呜旻刚刚在心里唱了一首歌：wool！wool！',
+  '姐姐今天笑了三次，呜旻都记下来了。',
+];
+
+const shyLines = [
+  '姐姐别一直看呜旻……耳朵会发烫的。',
+  '呜……姐姐一夸，呜旻的处理器就转不过来。',
+  '姐姐，呜旻、呜旻才没有害羞。',
+  '姐姐再靠近一点，呜旻的耳朵就要冒烟了。',
+  'wool！wool！……别盯着看啦。',
 ];
 
 const petLines = {
-  happy: ['嘿嘿，好舒服～', '姐姐再摸摸～', '今天也喜欢姐姐。', '好开心！妞尼妞尼～'],
-  love: ['最喜欢姐姐了。', '抱抱姐姐！', '姐姐最好了。'],
-  giggle: ['嘻嘻，痒痒的。', '姐姐今天心情好吗？'],
-  wave: ['嗨，姐姐！', '看见姐姐啦～', '姐姐好！'],
-  cuddle: ['陪姐姐再待一会儿嘛。', '靠着姐姐真安心。'],
+  happy: ['wool！wool！姐姐再摸摸～', '呜旻的齿轮都转得轻快啦。', 'wool！wool！今天也最喜欢姐姐了。', '姐姐的手暖暖的，好舒服～', '再摸一下下，就一下下。'],
+  love: ['wool！wool！呜旻最喜欢姐姐了。', '姐姐，呜旻把尾巴借你抱。', '姐姐最好了，呜旻的心跳都变快啦。', '抱抱姐姐！'],
+  giggle: ['嘻嘻，痒痒的，wool！wool！', '姐姐今天也很可爱。'],
+  wave: ['嗨，姐姐！', '看见姐姐啦～', 'wool！wool！姐姐好！'],
+  cuddle: ['陪姐姐再待一会儿嘛。', '靠着姐姐真安心。', '姐姐身上暖乎乎的。'],
 };
 
 const feedLines = [
-  '是姐姐给的珍珠奶茶！',
-  '谢谢姐姐投喂～',
-  '咕噜咕噜……姐姐的奶茶最好喝。',
+  'wool！wool！是肉肉！呜旻开动啦！',
+  '姐姐最懂呜旻了，肉肉！',
+  '咔嚓咔嚓……呜旻吃得很认真。',
+  '姐姐，再来一块肉肉好不好？',
+  '这块肉肉呜旻要记在小本本上。',
 ];
-const veggieLines = [
-  '蔬菜！',
-  '是姐姐给的蔬菜！好新鲜～',
-  '最喜欢吃蔬菜了。',
-  '姐姐，再来一口蔬菜好不好？',
+const sleepLines = ['呜旻睡一会儿……姐姐晚安。', 'zzz……肉肉……zzz……', '姐姐，呜旻先睡一小会儿。'];
+const wakeLines = ['wool！wool！呜旻睡饱啦！', '再睡五分钟……肉肉还没吃完。', '姐姐早，呜旻伸个长长的懒腰～'];
+const angryLines = ['ming！ming！再戳呜旻要炸毛了。', 'ming！ming！呜旻的处理器要冒烟啦。', '姐姐别戳啦……呜旻要摆烂了。', '再戳，呜旻就变成ming！ming！模式了！'];
+const grabLines = ['姐姐，要带呜旻去哪儿？', '姐姐轻点轻点～呜旻还没睡醒呢。', '放呜旻下来啦！'];
+const landLines = ['ming！ming！姐姐，呜旻的屁股疼。', '呜旻稳稳落地！', '吓呜旻一跳……姐姐。'];
+const runLines = ['wool！wool！跑起来啦～姐姐追不上呜旻！', '呜旻跑得可快了！', '冲呀！'];
+const tiredLines = ['呼……跑累了，姐姐。', 'ming！ming！呜旻要歇一会儿。', '要喝热水……还要肉肉。'];
+const jumpLines = ['跳！', '姐姐看呜旻跳得高不高！', 'wool！wool！'];
+const skateStartLines = ['滑板时间！', '姐姐看呜旻滑板～', 'wool！wool！出发咯！', '看呜旻的滑板！'];
+const skateEndLines = ['滑完啦～', '姐姐，呜旻滑得好不好？', '还想再滑一次！', '稳稳落地！'];
+const snowOnLines = [
+  'wool！wool！下雪啦！姐姐快看，雪花落在呜旻鼻尖上！',
+  '冬天最棒了！呜旻可以在雪里滚一整天。',
+  '呜旻是机器狼，不怕冷；姐姐要穿暖一点哦。',
 ];
-const sleepLines = ['姐姐晚安……', '晚安姐姐，做个好梦。', '姐姐，我困了，眯一下下。'];
-const wakeLines = ['唔……姐姐，我睡醒了。', '再睡五分钟……姐姐等等我。', '姐姐早，伸个懒腰～'];
-const angryLines = ['姐姐别戳啦！', '再戳我要生气了。兔妞兔妞～', '哼，姐姐不理我了吗。'];
-const grabLines = ['姐姐，要去哪儿？', '姐姐轻点轻点～', '放我下来啦！'];
-const landLines = ['呜……姐姐，屁股疼。', '姐姐，安全落地！', '吓我一跳……姐姐。'];
-const runLines = ['跑起来啦～', '姐姐看我跑得快不快！', '冲呀！'];
-const tiredLines = ['呼……跑累了。', '姐姐，我跑不动了……', '要喝水……'];
-const jumpLines = ['跳！', '姐姐看我跳得高不高！', '蹦～'];
-const skateStartLines = ['滑板时间！', '姐姐看我滑板～', '出发咯！', '看我的滑板！'];
-const skateEndLines = ['滑完啦～', '姐姐，我滑得好不好？', '还想再滑一次！', '稳稳落地！'];
+const snowOffLines = [
+  '雪停啦，呜旻把最后一片雪花收进口袋。',
+  '等下一场雪，呜旻再陪姐姐看。',
+];
+const winterIdleLines = [
+  '下雪天最适合搭积木，姐姐来不来？',
+  '呜旻的鼻尖沾到雪花了，凉凉的，好舒服。',
+  '冬天的桌面像一块大蛋糕，呜旻舍不得踩乱。',
+  '姐姐，雪花落在呜旻的耳朵上，痒痒的。',
+  '要是能堆一只雪狼，呜旻想和姐姐一起堆。',
+];
+const lineTags = {};
 
 const TASK_EXPRESSION = {
   thinking: 'confused',
@@ -159,13 +214,49 @@ function groundFor(wa) {
   return wa.y + wa.height - WIN_H;
 }
 
-function workAreaForWindow() {
+function displayForWindow() {
   const b = win.getBounds();
+  return screen.getDisplayNearestPoint({
+    x: Math.round(b.x + WIN_W / 2),
+    y: Math.round(b.y + WIN_H / 2),
+  });
+}
+
+function workAreaForWindow() {
+  return displayForWindow().workArea;
+}
+
+function isOnAnyDisplay(bounds) {
+  return screen.getAllDisplays().some(({ workArea: a }) => {
+    const overlapX = Math.min(bounds.x + bounds.width, a.x + a.width) - Math.max(bounds.x, a.x);
+    const overlapY = Math.min(bounds.y + bounds.height, a.y + a.height) - Math.max(bounds.y, a.y);
+    return overlapX >= 80 && overlapY >= 80;
+  });
+}
+
+function ensureOnScreen() {
+  if (!win || win.isDestroyed() || drag.active) return;
+  if (
+    mode === 'drag' ||
+    mode === 'fall' ||
+    mode === 'jump' ||
+    mode === 'game'
+  ) {
+    return;
+  }
+  const b = win.getBounds();
+  if (isOnAnyDisplay(b)) return;
+
   const display = screen.getDisplayNearestPoint({
     x: Math.round(b.x + WIN_W / 2),
-    y: Math.round(b.y + WIN_H - 20),
+    y: Math.round(b.y + WIN_H / 2),
   });
-  return display.workArea;
+  const wa = display.workArea;
+  const nx = clamp(b.x, wa.x, wa.x + wa.width - WIN_W);
+  const ny = clamp(b.y, wa.y, groundFor(wa));
+  win.setPosition(Math.round(nx), Math.round(ny), false);
+  stopWalk();
+  saveConfig();
 }
 
 function positionInitial() {
@@ -189,13 +280,23 @@ function positionInitial() {
 }
 
 function express(name, { speech = null, effect, hold = 3000, persistent = false } = {}) {
-  currentSprite = name;
-  send('pet:express', { name, speech, effect, hold, persistent });
+  currentSprite = spriteFile(name);
+  const tag = speech ? lineTags[speech] || null : null;
+  send('pet:express', { name, speech, effect, hold, persistent, tag });
   clearTimeout(exprTimer);
   exprTimer = null;
   if (persistent) return;
   exprTimer = setTimeout(() => {
-    if (mode === 'sleep' || mode === 'drag' || mode === 'fall' || mode === 'jump') return;
+    if (
+      mode === 'sleep' ||
+      mode === 'drag' ||
+      mode === 'fall' ||
+      mode === 'jump' ||
+      mode === 'walk' ||
+      mode === 'run'
+    ) {
+      return;
+    }
     send('pet:express', { name: 'idle', speech: null, effect: null, hold: 0, persistent: false });
   }, hold);
 }
@@ -205,11 +306,34 @@ function setWalking(on, dir, run = false) {
 }
 
 function sendSettings() {
-  send('pet:settings', { scale: cfg.scale, onTop: cfg.onTop });
+  send('pet:settings', { scale: cfg.scale, onTop: cfg.onTop, winter: !!cfg.winter, manifest: PET_MANIFEST });
 }
 
-function taskFilePath() {
-  return path.join(app.getPath('userData'), 'opencode-status.json');
+function statusCandidates() {
+  const appData = process.env.APPDATA || path.join(app.getPath('home'), 'AppData', 'Roaming');
+  const files = [];
+  if (process.env.WUMIN_STATUS_FILE) files.push(process.env.WUMIN_STATUS_FILE);
+  files.push(path.join(app.getPath('userData'), 'opencode-status.json'));
+  for (const name of ['呜旻', '呜旻桌宠', '兔玹', '喵鳐', '花东', '啾汪', '启猴']) {
+    files.push(path.join(appData, name, 'opencode-status.json'));
+  }
+  return files;
+}
+
+function readTaskStatus() {
+  let best = null;
+  for (const file of statusCandidates()) {
+    try {
+      const raw = fs.readFileSync(file, 'utf8');
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== 'object') continue;
+      const stamp = Number(data.updatedAt) || 0;
+      if (!best || stamp > best.stamp) best = { data, stamp };
+    } catch {
+      /* try next pet */
+    }
+  }
+  return best;
 }
 
 function clearTask() {
@@ -252,6 +376,7 @@ function applyTask(data) {
   const detail = typeof data.detail === 'string' ? data.detail : progress?.current || '';
   taskInfo = { state, message, task, detail, progress };
   taskActive = active;
+  writePresence();
   send('pet:task', { state, message, task, detail, progress });
 
   clearTimeout(taskHideTimer);
@@ -271,6 +396,7 @@ function applyTask(data) {
 
   if (mode === 'sleep') wake();
   stopWalk();
+  if (Date.now() - lastUserAction < 4500) return;
   express(TASK_EXPRESSION[state], {
     speech: message || null,
     effect: TASK_EFFECT[state],
@@ -289,10 +415,8 @@ function applyTask(data) {
 
 function pollTask() {
   if (!revealed || !win || win.isDestroyed()) return;
-  let raw;
-  try {
-    raw = fs.readFileSync(taskFilePath(), 'utf8');
-  } catch {
+  const found = readTaskStatus();
+  if (!found) {
     if (!taskInfo) return;
     if (!taskMissingSince) taskMissingSince = Date.now();
     else if (Date.now() - taskMissingSince > 20000) clearTask();
@@ -300,13 +424,7 @@ function pollTask() {
   }
   taskMissingSince = 0;
 
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return;
-  }
-  if (!data || typeof data !== 'object') return;
+  const data = found.data;
   if (!data.state || data.state === 'idle') {
     if (taskInfo) clearTask();
     return;
@@ -327,9 +445,13 @@ function pollTask() {
 
 function stopWalk() {
   stopSkate();
+  cancelSocialAction();
   if (mode === 'walk' || mode === 'run') {
     mode = 'idle';
     setWalking(false);
+    if (currentSprite === 'idle') {
+      express('idle', { speech: null, effect: null, hold: 0 });
+    }
     saveConfig();
   }
 }
@@ -359,7 +481,7 @@ function startWalk() {
   facing = walk.dir;
   mode = 'walk';
   setWalking(true, walk.dir, false);
-  express('idle', { speech: Math.random() < 0.4 ? '去那边看看～' : null, hold: 2200 });
+  express('stand', { speech: Math.random() < 0.4 ? '去那边看看～' : null, hold: 2200 });
 }
 
 function startRun() {
@@ -385,7 +507,7 @@ function startRun() {
   facing = walk.dir;
   mode = 'run';
   setWalking(true, walk.dir, true);
-  express('happy', { speech: pick(runLines), effect: 'sparkle', hold: duration + 250 });
+  express('stand', { speech: pick(runLines), effect: 'sparkle', hold: duration + 250 });
 }
 
 function startJump() {
@@ -405,16 +527,22 @@ function startJump() {
   };
   mode = 'jump';
   setWalking(false);
-  express('giggle', { speech: pick(jumpLines), effect: 'sparkle', hold: 2400 });
+  express('stand', { speech: pick(jumpLines), effect: 'sparkle', hold: 2400 });
 }
 
 function finishWalk(nx, wa) {
   const wasRun = walk.run;
+  const wasSocial = !!walk.social;
   mode = 'idle';
   setWalking(false);
   win.setPosition(Math.round(nx), groundFor(wa), false);
-  if (wasRun) {
-    express('hot', { speech: pick(tiredLines), effect: 'sweat', hold: 2600 });
+  if (wasSocial) {
+    clearSocialState();
+    express('happy', { speech: pick(socialEndLines), effect: 'sparkle', hold: 2400 });
+    saveConfig();
+    scheduleBehavior();
+  } else if (wasRun) {
+    if (!walk.flee) express('hot', { speech: pick(tiredLines), effect: 'sweat', hold: 2600 });
   } else {
     express('idle', {
       speech: Math.random() < 0.3 ? '到了！' : null,
@@ -428,8 +556,15 @@ function finishJump() {
   const impact = Math.abs(jump.vy);
   mode = 'idle';
   setWalking(false);
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  win.setPosition(
+    Math.round(clamp(b.x, wa.x, wa.x + wa.width - WIN_W)),
+    Math.round(groundFor(wa)),
+    false
+  );
   send('pet:land', { impact });
-  express('happy', { speech: pick(jumpLines), effect: 'sparkle', hold: 1900 });
+  express('stand', { speech: pick(jumpLines), effect: 'sparkle', hold: 1900 });
   saveConfig();
 }
 
@@ -441,6 +576,9 @@ function setFacing(next) {
 function stopSkate() {
   if (mode !== 'skate') return;
   mode = 'idle';
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  win.setPosition(Math.round(b.x), Math.round(groundFor(wa)), false);
 }
 
 function startSkate() {
@@ -496,13 +634,23 @@ function startSkate() {
 
 function finishSkate() {
   if (mode !== 'skate') return;
+  const wasSocial = !!skate.social;
   mode = 'idle';
   win.setPosition(Math.round(skate.endX), skate.ground, false);
-  express('happy', {
-    speech: pick(skateEndLines),
-    effect: 'sparkle',
-    hold: 2600,
-  });
+  if (wasSocial) {
+    clearSocialState();
+    express('happy', {
+      speech: pick(socialEndLines),
+      effect: 'sparkle',
+      hold: 2400,
+    });
+  } else {
+    express('stand', {
+      speech: pick(skateEndLines),
+      effect: 'sparkle',
+      hold: 2600,
+    });
+  }
   saveConfig();
   scheduleBehavior();
 }
@@ -510,6 +658,7 @@ function finishSkate() {
 function petClick(fromMenu = false) {
   lastUserAction = Date.now();
   scheduleBehavior();
+  cancelGame();
   if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
   if (mode === 'sleep') {
     wake();
@@ -533,25 +682,32 @@ function petClick(fromMenu = false) {
 }
 
 function feed() {
+  lastUserAction = Date.now();
+  settleForAction();
   ensureVisible();
   if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
   if (mode === 'sleep') wake();
   stopWalk();
   mode = 'idle';
-  cfg.energy = Math.min(100, cfg.energy + 28);
-  express('bubbletea', { speech: pick(feedLines), effect: 'sparkle', hold: 4200 });
+  cfg.energy = Math.min(100, cfg.energy + 30);
+  express('happy', { speech: pick(feedLines), effect: 'meat', hold: 4200 });
   scheduleBehavior();
 }
 
-function feedVeggies() {
-  ensureVisible();
-  if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
-  if (mode === 'sleep') wake();
-  stopWalk();
-  mode = 'idle';
-  cfg.energy = Math.min(100, cfg.energy + 34);
-  express('happy', { speech: pick(veggieLines), effect: 'veggies', hold: 4200 });
-  scheduleBehavior();
+function setWinter(on) {
+  lastUserAction = Date.now();
+  const next = typeof on === 'boolean' ? on : !cfg.winter;
+  if (next === !!cfg.winter) return;
+  cfg.winter = next;
+  saveConfig();
+  sendSettings();
+  if (tray) tray.setContextMenu(buildTrayMenu());
+  if (next) {
+    cfg.energy = Math.min(100, cfg.energy + 5);
+    express('happy', { speech: pick(snowOnLines), effect: 'sparkle', hold: 4400 });
+  } else {
+    express('sleepy', { speech: pick(snowOffLines), hold: 2800 });
+  }
 }
 
 function goSleep(auto = false) {
@@ -560,7 +716,7 @@ function goSleep(auto = false) {
   mode = 'sleep';
   sleepSince = Date.now();
   express('goodnight', {
-    speech: auto ? '姐姐，我困了，先睡一下……' : pick(sleepLines),
+    speech: auto ? '呜旻先睡一会儿……姐姐有事就叫呜旻。' : pick(sleepLines),
     effect: 'zzz',
     persistent: true,
     hold: 6000,
@@ -576,11 +732,81 @@ function wake() {
 }
 
 function toggleSleep() {
+  settleForAction();
   ensureVisible();
   if (mode === 'sleep') wake();
   else goSleep(false);
+  if (tray) tray.setContextMenu(buildTrayMenu());
 }
 
+function settleForAction() {
+  cancelGame();
+}
+
+function cancelGame() {
+  /* 积木窗口独立存在，不随点击关闭 */
+}
+
+function openBlocks() {
+  settleForAction();
+  ensureVisible();
+  if (mode === 'sleep') wake();
+  if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
+  stopWalk();
+  if (blocksWin && !blocksWin.isDestroyed()) {
+    blocksWin.show();
+    blocksWin.focus();
+    return;
+  }
+  const wa = workAreaForWindow();
+  const bw = 460;
+  const bh = 640;
+  const x = Math.round(wa.x + (wa.width - bw) / 2);
+  const y = Math.round(wa.y + Math.max(20, (wa.height - bh) / 2));
+  blocksWin = new BrowserWindow({
+    x,
+    y,
+    width: bw,
+    height: bh,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    show: false,
+    title: '搭积木 · 呜旻',
+    webPreferences: {
+      preload: path.join(__dirname, 'renderer', 'blocks-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  blocksWin.setAlwaysOnTop(true, 'screen-saver');
+  blocksWin.loadFile(path.join(__dirname, 'renderer', 'blocks.html'));
+  blocksWin.once('ready-to-show', () => {
+    if (blocksWin && !blocksWin.isDestroyed()) blocksWin.show();
+  });
+  blocksWin.on('closed', () => {
+    blocksWin = null;
+    scheduleBehavior();
+  });
+  blocksWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  express('happy', {
+    speech: '姐姐加油搭高高，呜旻在下面帮你数层数！',
+    effect: 'sparkle',
+    hold: 3000,
+  });
+}
+
+function playGame() {
+  openBlocks();
+}
 function startFall() {
   drag.active = false;
   const b = win.getBounds();
@@ -608,7 +834,7 @@ function startFall() {
   if (ny >= ground - 2 && Math.abs(vy) < 160) {
     mode = 'idle';
     win.setPosition(Math.round(nx), ground, false);
-    express('hot', { speech: '放我下来啦～', hold: 2200 });
+    express('hot', { speech: 'wool！wool！放呜旻下来啦～', hold: 2200 });
     saveConfig();
     return;
   }
@@ -630,12 +856,18 @@ function startFall() {
 function land() {
   const impact = fall.vy;
   mode = 'idle';
-  fall = { vx: 0, vy: 0, ground: fall.ground };
-  win.setPosition(win.getBounds().x, fall.ground, false);
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  fall = { vx: 0, vy: 0, ground: groundFor(wa) };
+  win.setPosition(
+    Math.round(clamp(b.x, wa.x, wa.x + wa.width - WIN_W)),
+    Math.round(fall.ground),
+    false
+  );
   if (impact > 1250) {
     express('angry', { speech: pick(landLines), effect: 'anger', hold: 2800 });
   } else {
-    express('surprised', { speech: '安全落地！', effect: 'sparkle', hold: 1900 });
+    express('surprised', { speech: 'wool！wool！呜旻安全落地！', effect: 'sparkle', hold: 1900 });
   }
   send('pet:land', { impact });
   saveConfig();
@@ -651,6 +883,18 @@ function tick() {
   if (!win.isVisible()) return;
   updatePointer();
   if (drag.active || mode === 'drag') return;
+
+  if (now - socialLastWrite > 1000) {
+    socialLastWrite = now;
+    writePresence();
+    checkSocial(now);
+    monitorSocialPartner(now);
+  }
+
+  if (now - lastScreenCheck > 1200) {
+    lastScreenCheck = now;
+    ensureOnScreen();
+  }
 
   if (mode === 'walk' || mode === 'run') {
     const b = win.getBounds();
@@ -672,7 +916,8 @@ function tick() {
     }
   } else if (mode === 'jump') {
     const b = win.getBounds();
-    const wa = jump.wa || workAreaForWindow();
+    const wa = workAreaForWindow();
+    const ground = groundFor(wa);
     jump.vy += GRAVITY * dt;
     let nx = b.x + jump.vx * dt;
     let ny = b.y + jump.vy * dt;
@@ -683,16 +928,38 @@ function tick() {
       nx = wa.x + wa.width - WIN_W;
       jump.vx = 0;
     }
-    if (ny >= jump.ground) {
-      ny = jump.ground;
+    if (ny >= ground) {
+      ny = ground;
       win.setPosition(Math.round(nx), Math.round(ny), false);
       finishJump();
+    } else {
+      win.setPosition(Math.round(nx), Math.round(ny), false);
+    }
+  } else if (mode === 'hop') {
+    const b = win.getBounds();
+    const wa = workAreaForWindow();
+    const ground = groundFor(wa);
+    socialHop.vy += GRAVITY * dt;
+    const nx = clamp(b.x, wa.x, wa.x + wa.width - WIN_W);
+    const ny = b.y + socialHop.vy * dt;
+    if (ny >= ground) {
+      win.setPosition(Math.round(nx), Math.round(ground), false);
+      if (socialHop.left > 0 && Date.now() < socialHop.until - 200) {
+        socialHop.left -= 1;
+        socialHop.vy = -620 - Math.random() * 50;
+        send('pet:land', { impact: 420 });
+        send('pet:effect', { type: 'sparkle' });
+      } else {
+        finishSocialHop();
+      }
     } else {
       win.setPosition(Math.round(nx), Math.round(ny), false);
     }
   } else if (mode === 'fall') {
     const b = win.getBounds();
     const wa = workAreaForWindow();
+    const ground = groundFor(wa);
+    fall.ground = ground;
     fall.vy += GRAVITY * dt;
     fall.vx *= Math.pow(0.35, dt);
     let nx = b.x + fall.vx * dt;
@@ -704,8 +971,8 @@ function tick() {
       nx = wa.x + wa.width - WIN_W;
       fall.vx = -Math.abs(fall.vx) * 0.35;
     }
-    if (ny >= fall.ground) {
-      ny = fall.ground;
+    if (ny >= ground) {
+      ny = ground;
       win.setPosition(Math.round(nx), Math.round(ny), false);
       land();
     } else {
@@ -745,6 +1012,11 @@ function tick() {
 }
 
 function idleBehavior() {
+  if (Date.now() < socialQuietUntil) {
+    scheduleBehavior();
+    return;
+  }
+
   if (revealed && mode === 'idle' && !drag.active) {
     if (taskActive) {
       scheduleBehavior();
@@ -755,34 +1027,550 @@ function idleBehavior() {
       return;
     }
     const r = Math.random();
-    if ((isNight() && r < 0.32) || (cfg.energy < 28 && r < 0.5)) {
+    if ((isNight() && r < 0.3) || (cfg.energy < 24 && r < 0.55)) {
       goSleep(true);
     } else if (r < 0.1) {
       startWalk();
     } else if (r < 0.18) {
       startRun();
-    } else if (r < 0.26) {
+    } else if (r < 0.25) {
       startJump();
-    } else if (r < 0.38) {
-      express('sleepy', { speech: '哈啊……姐姐，我有点困。', effect: 'zzz', hold: 2600 });
-    } else if (r < 0.48) {
-      express('bored', { speech: '好无聊……姐姐陪我玩嘛。', hold: 2800 });
-    } else if (r < 0.56) {
-      express('confused', { speech: '嗯？姐姐你在忙吗？', effect: 'question', hold: 2600 });
-    } else if (r < 0.64) {
-      express('hot', { speech: '好热……姐姐，我想吃蔬菜沙拉。', effect: 'sweat', hold: 2600 });
-    } else if (r < 0.72) {
-      express('cuddle', { speech: '姐姐陪我待一会儿吧。', effect: 'hearts', hold: 3000 });
-    } else if (r < 0.8) {
-      express('back', { speech: '……（背过身去）', hold: 2400 });
-    } else if (r < 0.9) {
-      express('giggle', { speech: '想到开心的事！', effect: 'sparkle', hold: 2600 });
+    } else if (r < 0.31) {
+      startSkate();
+    } else if (r < 0.44) {
+      express('happy', {
+        speech: pick(['姐姐，呜旻想搭积木了。', '要不要一起搭高高？呜旻把积木都摆好啦。']),
+        effect: 'sparkle',
+        hold: 3200,
+      });
+    } else if (r < 0.53) {
+      express('sleepy', { speech: '哈啊……姐姐，呜旻有点困。', effect: 'zzz', hold: 2600 });
+    } else if (r < 0.62) {
+      express('bored', { speech: 'ming！ming！姐姐在忙吗？呜旻有点想和你说话。', hold: 2800 });
+    } else if (r < 0.7) {
+      express('confused', { speech: '呜旻在听，姐姐继续说嘛。', effect: 'question', hold: 2600 });
+    } else if (r < 0.78) {
+      express('shy', { speech: pick(shyLines), effect: 'hearts', hold: 3200 });
+    } else if (r < 0.86) {
+      express('cuddle', { speech: '姐姐陪呜旻待一会儿吧。', effect: 'hearts', hold: 3000 });
+    } else if (r < 0.92) {
+      express('love', { speech: pick(petLines.love), effect: 'hearts', hold: 3000 });
+    } else if (r < 0.95) {
+      express('giggle', { speech: '想到开心的事！wool！wool！', effect: 'sparkle', hold: 2600 });
+    } else if (r < 0.98) {
+      express('shy', {
+        speech: '姐姐……可以给呜旻一块肉肉吗？',
+        effect: 'hearts',
+        hold: 3400,
+      });
+    } else if (cfg.winter && Math.random() < 0.6) {
+      express('idle', { speech: pick(winterIdleLines), effect: 'sparkle', hold: 3800 });
     } else {
       express('idle', { speech: pick(idleLines), hold: 3600 });
     }
   }
   scheduleBehavior();
 }
+
+const SOCIAL_ID = 'wumin';
+const SOCIAL_NAME = '呜旻';
+const socialLines = {
+  huadong: ['花东，要一起玩吗？', '花东，呜旻陪你走一段吧。', '花东，看谁跑得更快！'],
+  jiuwang: ['啾汪，一起玩吗？', '啾汪，呜旻分你一块肉肉。', '啾汪，你在忙什么呀？'],
+  qihou: ['启猴，一起玩吗？', '启猴，呜旻陪你跳一跳！', '启猴，要不要一起搭积木？'],
+  tuxuan: ['兔玹，一起玩吗？', '兔玹，呜旻陪你玩吧。', '兔玹，今天也很可爱。'],
+  miaoyao: ['喵鳐，一起玩吗？', '喵鳐，呜旻给你充点电。', '喵鳐，看呜旻滑板！'],
+  default: ['一起玩吗？', '要不要呜旻陪你玩？', '你好呀，呜旻是机器狼。'],
+};
+const socialDarkLines = {};
+const SOCIAL_START_DELAY = 1400;
+const SOCIAL_ACTIONS = ['walk', 'jump', 'skate'];
+const socialActionLines = {
+  walk: ['一起散步吧！', '姐姐看，呜旻交到朋友啦～', '一起走走～'],
+  jump: ['一起蹦蹦跳跳！', '跳起来～wool！wool！', '一起蹦一蹦！'],
+  skate: ['一起滑滑板吧！', '看呜旻和朋友一起滑！', '一起滑一段～'],
+};
+const socialJoinLines = ['好呀！', '来啦～', '等呜旻一下！'];
+const socialEndLines = ['一起玩真开心！', '下次再一起玩～', 'wool！wool！交到朋友啦。'];
+
+function scaredSocialLine(other) {
+  const name = (other && other.name) || '它';
+  return pick([
+    `变异${name}……好可怕。`,
+    `那个${name}黑化了……`,
+    `${name}的样子不对劲，快躲开。`,
+    `呜，${name}好可怕……`,
+  ]);
+}
+
+function fleeFrom(other) {
+  if (!revealed || drag.active || mode === 'sleep' || mode === 'drag' || mode === 'fall' || mode === 'jump') return;
+  stopWalk();
+  const wa = workAreaForWindow();
+  const minX = wa.x + 4;
+  const maxX = wa.x + wa.width - WIN_W - 4;
+  if (maxX <= minX) return;
+  const b = win.getBounds();
+  const otherCenter = other.x + WIN_W / 2;
+  const myCenter = b.x + WIN_W / 2;
+  const dir = otherCenter >= myCenter ? -1 : 1;
+  const target = dir < 0 ? minX : maxX;
+  const distance = Math.abs(target - b.x);
+  if (distance < 60) {
+    express('surprised', {
+      speech: scaredSocialLine(other),
+      effect: 'exclamation',
+      hold: 2800,
+    });
+    return;
+  }
+  const duration = clamp((distance / 240) * 1000, 700, 3200);
+  walk = {
+    targetX: target,
+    dir,
+    speed: 230 + Math.random() * 60,
+    wa,
+    endAt: Date.now() + duration,
+    run: true,
+    flee: true,
+  };
+  facing = dir;
+  mode = 'run';
+  setWalking(true, dir, true);
+  express('surprised', {
+    speech: scaredSocialLine(other),
+    effect: 'sweat',
+    hold: Math.min(duration + 700, 3600),
+  });
+}
+
+let socialDir = null;
+let socialLastWrite = 0;
+let socialCooldownUntil = 0;
+let socialQuietUntil = 0;
+let socialLastAt = 0;
+let socialLastTarget = '';
+let socialAct = { action: '', start: 0, duration: 0, until: 0, dir: 1, lead: '', partner: '' };
+let socialPendingTimer = null;
+let socialJoinedKey = '';
+let socialHop = { vy: 0, ground: 0, until: 0, left: 0 };
+
+
+function getSocialDir() {
+  if (!socialDir) {
+    socialDir = path.join(app.getPath('home'), '.desktop-pets');
+    fs.mkdirSync(socialDir, { recursive: true });
+  }
+  return socialDir;
+}
+
+function writePresence() {
+  if (!win || win.isDestroyed()) return;
+  const b = win.getBounds();
+  const data = {
+    id: SOCIAL_ID,
+    name: SOCIAL_NAME,
+    x: b.x,
+    y: b.y,
+    w: WIN_W,
+    h: WIN_H,
+    mode,
+    facing,
+    dark: isDarkNow(),
+    visible: win.isVisible(),
+    busy: !!taskActive,
+    socialAt: socialLastAt,
+    socialTarget: socialLastTarget,
+    socialAction: socialAct.action,
+    socialStart: socialAct.start,
+    socialDuration: socialAct.duration,
+    socialUntil: socialAct.until,
+    socialDir: socialAct.dir,
+    socialLead: socialAct.lead,
+    energy: Math.round(cfg.energy),
+    updatedAt: Date.now(),
+  };
+  try {
+    fs.writeFileSync(path.join(getSocialDir(), `social-${SOCIAL_ID}.json`), JSON.stringify(data));
+  } catch {}
+}
+
+function isDarkNow() {
+  return typeof darkMode !== 'undefined' && !!darkMode;
+}
+
+function socialClearDark() {
+  if (typeof clearDark === 'function' && typeof darkStay !== 'undefined' && !darkStay) clearDark();
+}
+
+function clearSocialState() {
+  socialAct = { action: '', start: 0, duration: 0, until: 0, dir: 1, lead: '', partner: '' };
+}
+
+function cancelSocialAction() {
+  const hadSocial = !!socialAct.action;
+  clearTimeout(socialPendingTimer);
+  socialPendingTimer = null;
+  if (hadSocial) clearSocialState();
+  if (mode === 'hop') {
+    mode = 'idle';
+    setWalking(false);
+    const wa = workAreaForWindow();
+    const b = win.getBounds();
+    win.setPosition(
+      Math.round(clamp(b.x, wa.x, wa.x + wa.width - WIN_W)),
+      Math.round(groundFor(wa)),
+      false
+    );
+  }
+  if (hadSocial) writePresence();
+}
+
+function pickSocialAction() {
+  const r = Math.random();
+  if (r < 0.4) return 'walk';
+  if (r < 0.7) return 'jump';
+  return 'skate';
+}
+
+function roomDir(wa, x) {
+  const right = wa.x + wa.width - WIN_W - x;
+  const left = x - wa.x;
+  if (right < 140 && left > right) return -1;
+  if (left < 140 && right > left) return 1;
+  return Math.random() < 0.5 ? 1 : -1;
+}
+
+function isJoinableSession(data, now) {
+  if (!data || !SOCIAL_ACTIONS.includes(data.socialAction)) return false;
+  if (data.socialLead !== data.id || data.socialTarget !== SOCIAL_ID) return false;
+  if (!Number.isFinite(data.socialStart) || !Number.isFinite(data.socialUntil)) return false;
+  if (now >= Number(data.socialUntil)) return false;
+  if (now < Number(data.socialStart) - 5000) return false;
+  return true;
+}
+
+function monitorSocialPartner(now) {
+  if (!socialAct.action || !socialAct.partner) return;
+  if (now < socialAct.start - 1000) return;
+  const started = mode === 'walk' || mode === 'run' || mode === 'hop' || mode === 'skate';
+  const abort = () => {
+    if (started) stopWalk();
+    else cancelSocialAction();
+  };
+  if (!started && now >= socialAct.start + 1200) {
+    abort();
+    return;
+  }
+  let raw;
+  try {
+    raw = fs.readFileSync(
+      path.join(getSocialDir(), `social-${socialAct.partner}.json`),
+      'utf8'
+    );
+  } catch {
+    abort();
+    return;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (!data || data.id !== socialAct.partner || data.visible === false || data.busy) {
+    abort();
+    return;
+  }
+  if (now - Number(data.updatedAt) > 3500) {
+    abort();
+    return;
+  }
+  if (data.mode === 'sleep' || data.mode === 'drag' || data.mode === 'fall') {
+    abort();
+    return;
+  }
+  if ((started || now >= socialAct.start - 300) && data.socialAction !== socialAct.action) abort();
+}
+
+function socialInteract(other, now) {
+  const me = win.getBounds();
+  const dir = other.x + WIN_W / 2 > me.x + WIN_W / 2 ? 1 : -1;
+  setFacing(dir);
+  socialCooldownUntil = now + 30000 + Math.random() * 30000;
+  socialLastAt = now;
+  socialLastTarget = other.id || '';
+
+  if (isDarkNow()) {
+    socialQuietUntil = now + 4200;
+    const lines = socialDarkLines[other.id] || socialDarkLines.default || ['哼。'];
+    express('back', { speech: pick(lines), effect: 'dark', hold: 3400, keepSpeech: true });
+    return;
+  }
+
+  if (other.dark) {
+    socialCooldownUntil = now + 15000 + Math.random() * 15000;
+    socialQuietUntil = now + 3200;
+    socialLastAt = now;
+    socialLastTarget = other.id || '';
+    fleeFrom(other);
+    return;
+  }
+
+  const action = pickSocialAction();
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  const actionDir = action === 'jump' ? dir : roomDir(wa, b.x);
+  const duration =
+    action === 'walk'
+      ? 5200 + Math.random() * 2600
+      : action === 'jump'
+        ? 3400
+        : 3000 + Math.random() * 1200;
+  const start = now + SOCIAL_START_DELAY;
+  const until = start + duration + 1600;
+
+  socialAct = {
+    action,
+    start,
+    duration,
+    until,
+    dir: actionDir,
+    lead: SOCIAL_ID,
+    partner: other.id || '',
+  };
+  socialQuietUntil = until + 1000;
+  socialJoinedKey = `${SOCIAL_ID}:${start}`;
+  writePresence();
+  scheduleSocialAction(socialAct);
+  express('happy', {
+    speech: pick(socialActionLines[action] || socialJoinLines),
+    effect: 'sparkle',
+    hold: 1300,
+  });
+}
+
+function joinSocialAction(other, now) {
+  const key = `${other.id}:${other.socialStart}`;
+  if (socialJoinedKey === key) return;
+
+  if (other.dark) {
+    socialJoinedKey = key;
+    socialCooldownUntil = now + 15000 + Math.random() * 15000;
+    socialQuietUntil = now + 3200;
+    fleeFrom(other);
+    return;
+  }
+
+  clearTimeout(socialPendingTimer);
+  socialPendingTimer = null;
+
+  const rawStart = Number(other.socialStart) || now;
+  const rawDuration = clamp(Number(other.socialDuration) || 4000, 600, 12000);
+  const elapsed = Math.max(0, now - rawStart);
+  const start = Math.max(now, rawStart);
+  const duration = Math.max(700, rawDuration - elapsed);
+  const until = Math.max(Number(other.socialUntil) || 0, start + duration + 1200);
+
+  socialAct = {
+    action: other.socialAction,
+    start,
+    duration,
+    until,
+    dir: Number(other.socialDir) < 0 ? -1 : 1,
+    lead: other.id,
+    partner: other.id,
+  };
+  socialJoinedKey = key;
+  socialCooldownUntil = now + 30000 + Math.random() * 30000;
+  socialQuietUntil = until + 1000;
+  socialLastAt = now;
+  socialLastTarget = other.id || '';
+  writePresence();
+  scheduleSocialAction(socialAct);
+  express('happy', { speech: pick(socialJoinLines), effect: 'sparkle', hold: 1300 });
+}
+
+function scheduleSocialAction(session) {
+  clearTimeout(socialPendingTimer);
+  socialPendingTimer = setTimeout(
+    () => runSocialAction(session),
+    Math.max(0, session.start - Date.now())
+  );
+}
+
+function runSocialAction(session) {
+  socialPendingTimer = null;
+  if (!win || win.isDestroyed() || !win.isVisible()) {
+    clearSocialState();
+    return;
+  }
+  if (drag.active || mode !== 'idle' || taskActive) {
+    clearSocialState();
+    return;
+  }
+  socialClearDark();
+  clearTimeout(exprTimer);
+  exprTimer = null;
+
+  if (session.action === 'walk') {
+    const wa = workAreaForWindow();
+    const b = win.getBounds();
+    const minX = wa.x;
+    const maxX = wa.x + wa.width - WIN_W;
+    if (maxX <= minX) {
+      clearSocialState();
+      return;
+    }
+    walk = {
+      targetX: clamp(b.x + session.dir * 3000, minX, maxX),
+      dir: session.dir,
+      speed: 76,
+      wa,
+      endAt: session.start + session.duration,
+      run: false,
+      social: true,
+    };
+    facing = session.dir;
+    mode = 'walk';
+    win.setPosition(Math.round(clamp(b.x, minX, maxX)), groundFor(wa), false);
+    setWalking(true, session.dir, false);
+    express('stand', { speech: null, hold: session.duration });
+    send('pet:effect', { type: 'sparkle' });
+    return;
+  }
+
+  if (session.action === 'jump') {
+    const wa = workAreaForWindow();
+    const ground = groundFor(wa);
+    const b = win.getBounds();
+    if (b.y !== ground) win.setPosition(b.x, ground, false);
+    setFacing(session.dir);
+    socialHop = {
+      vy: -640,
+      ground,
+      until: session.start + session.duration,
+      left: Math.max(2, Math.round(session.duration / 650)) - 1,
+    };
+    mode = 'hop';
+    setWalking(false);
+    send('pet:effect', { type: 'sparkle' });
+    return;
+  }
+
+  if (session.action === 'skate') {
+    const wa = workAreaForWindow();
+    const b = win.getBounds();
+    const minX = wa.x;
+    const maxX = wa.x + wa.width - WIN_W;
+    const ground = groundFor(wa);
+    const room = session.dir > 0 ? maxX - b.x : b.x - minX;
+    if (room < 60) {
+      runSocialAction({ ...session, action: 'jump' });
+      return;
+    }
+    const duration = clamp(session.duration, 1200, 9000);
+    const distance = Math.max(40, Math.min(room, (duration / 1000) * 175));
+    const hopDuration = clamp(duration * 0.22, 520, 760);
+    const hopAt = clamp(duration * 0.36, 200, duration - hopDuration - 80);
+    skate = {
+      startX: b.x,
+      endX: clamp(b.x + session.dir * distance, minX, maxX),
+      dir: session.dir,
+      startedAt: session.start,
+      duration,
+      ground,
+      hopStart: session.start + hopAt,
+      hopDuration,
+      hopDone: false,
+      hopEnded: false,
+      social: true,
+    };
+    mode = 'skate';
+    setFacing(session.dir);
+    win.setPosition(Math.round(b.x), ground, false);
+    express('skate', { speech: null, effect: null, hold: 0, persistent: true });
+    return;
+  }
+
+  clearSocialState();
+}
+
+function finishSocialHop() {
+  mode = 'idle';
+  setWalking(false);
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  win.setPosition(
+    Math.round(clamp(b.x, wa.x, wa.x + wa.width - WIN_W)),
+    Math.round(groundFor(wa)),
+    false
+  );
+  send('pet:land', { impact: 420 });
+  express('happy', { speech: pick(socialEndLines), effect: 'sparkle', hold: 2400 });
+  clearSocialState();
+  saveConfig();
+  scheduleBehavior();
+}
+
+function checkSocial(now) {
+  if (!revealed || !win || win.isDestroyed() || !win.isVisible()) return;
+  if (drag.active || mode !== 'idle' || taskActive) return;
+  if (now < socialQuietUntil) return;
+  let files;
+  try {
+    files = fs.readdirSync(getSocialDir());
+  } catch {
+    return;
+  }
+  const me = win.getBounds();
+  const myDisplay = screen.getDisplayNearestPoint({
+    x: Math.round(me.x + WIN_W / 2),
+    y: Math.round(me.y + WIN_H),
+  });
+  for (const file of files) {
+    if (!file.startsWith('social-') || file === `social-${SOCIAL_ID}.json` || !file.endsWith('.json')) continue;
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(path.join(getSocialDir(), file), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (!data || !data.id || data.id === SOCIAL_ID || data.visible === false || data.busy) continue;
+    if (!Number.isFinite(data.x) || !Number.isFinite(data.y)) continue;
+    if (now - Number(data.updatedAt) > 3000) continue;
+    if (data.mode !== 'idle') continue;
+    const otherDisplay = screen.getDisplayNearestPoint({
+      x: Math.round(data.x + WIN_W / 2),
+      y: Math.round(data.y + WIN_H),
+    });
+    if (otherDisplay.id !== myDisplay.id) continue;
+    const dx = Math.abs(data.x + WIN_W / 2 - (me.x + WIN_W / 2));
+    const dy = Math.abs(data.y + WIN_H - (me.y + WIN_H));
+    if (dx < 360 && dy < 80) {
+      if (data.dark && !isDarkNow()) {
+        if (socialAct.action && now < socialAct.until) continue;
+        if (now < socialCooldownUntil) continue;
+        socialCooldownUntil = now + 15000 + Math.random() * 15000;
+        socialQuietUntil = now + 3200;
+        socialLastAt = now;
+        socialLastTarget = data.id || '';
+        fleeFrom(data);
+        return;
+      }
+      if (!isDarkNow() && isJoinableSession(data, now) && data.id < SOCIAL_ID) {
+        joinSocialAction(data, now);
+        return;
+      }
+      if (socialAct.action && now < socialAct.until) continue;
+      if (now < socialCooldownUntil) continue;
+      if (!(SOCIAL_ID < data.id)) continue;
+      socialInteract(data, now);
+      return;
+    }
+  }
+}
+
 
 function scheduleBehavior() {
   clearTimeout(behaviorTimer);
@@ -793,12 +1581,13 @@ function setScale(scale) {
   cfg.scale = scale;
   sendSettings();
   saveConfig();
+  if (tray) tray.setContextMenu(buildTrayMenu());
 }
 
 function setOnTop(onTop) {
   cfg.onTop = !!onTop;
   if (win) {
-    win.setAlwaysOnTop(cfg.onTop, 'floating');
+    win.setAlwaysOnTop(cfg.onTop, 'normal');
     if (cfg.onTop) {
       win.moveTop();
       setTimeout(bringToFront, 100);
@@ -806,11 +1595,12 @@ function setOnTop(onTop) {
   }
   sendSettings();
   saveConfig();
+  if (tray) tray.setContextMenu(buildTrayMenu());
 }
 
 function bringToFront() {
   if (!win || win.isDestroyed() || !cfg.onTop) return;
-  win.setAlwaysOnTop(true, 'floating');
+  win.setAlwaysOnTop(true, 'normal');
   win.moveTop();
 }
 
@@ -920,6 +1710,7 @@ function updatePointer() {
 function ensureVisible() {
   if (!win) return;
   if (!win.isVisible()) win.showInactive();
+  ensureOnScreen();
   bringToFront();
 }
 
@@ -947,7 +1738,7 @@ function showForAttention() {
   if (!cfg.onTop) {
     clearTimeout(attentionTimer);
     attentionTop = true;
-    win.setAlwaysOnTop(true, 'floating');
+    win.setAlwaysOnTop(true, 'normal');
     attentionTimer = setTimeout(() => {
       if (attentionTop && !cfg.onTop) {
         attentionTop = false;
@@ -981,16 +1772,17 @@ function toggleShow() {
 
 function buildTrayMenu() {
   return Menu.buildFromTemplate([
-    { label: win && win.isVisible() ? '隐藏兔玹' : '显示兔玹', click: toggleShow },
+    { label: win && win.isVisible() ? '隐藏呜旻' : '显示呜旻', click: toggleShow },
     { type: 'separator' },
     { label: '摸摸头', click: () => { ensureVisible(); petClick(true); } },
-    { label: '喂蔬菜', click: feedVeggies },
-    { label: '喂奶茶', click: feed },
-    { label: mode === 'sleep' ? '叫醒它' : '睡一觉', click: toggleSleep },
+    { label: '喂肉肉', click: feed },
+    { label: '搭积木', click: openBlocks },
+    { label: mode === 'sleep' ? '叫醒呜旻' : '睡一觉', click: toggleSleep },
     { label: '去散步', click: () => { ensureVisible(); startWalk(); } },
     { label: '跑一跑', click: () => { ensureVisible(); startRun(); } },
     { label: '跳一跳', click: () => { ensureVisible(); startJump(); } },
     { label: '玩滑板', click: startSkate },
+    { label: cfg.winter ? '收起这场雪' : '下一场雪', click: () => setWinter() },
     { type: 'separator' },
     {
       label: '大小',
@@ -1016,12 +1808,13 @@ function createTray() {
     icon = nativeImage.createEmpty();
   }
   tray = new Tray(icon);
-  tray.setToolTip('兔玹 · 桌面宠物');
+  tray.setToolTip('呜旻 · 机器狼桌宠');
   tray.setContextMenu(buildTrayMenu());
   tray.on('click', toggleShow);
 }
 
 function handleAction(action) {
+  lastUserAction = Date.now();
   switch (action) {
     case 'pet':
       ensureVisible();
@@ -1030,25 +1823,32 @@ function handleAction(action) {
     case 'feed':
       feed();
       break;
-    case 'feed-veggies':
-      feedVeggies();
+    case 'game':
+      openBlocks();
+      break;
+    case 'snow':
+      setWinter();
       break;
     case 'sleep':
       toggleSleep();
       break;
     case 'walk':
+      settleForAction();
       ensureVisible();
       startWalk();
       break;
     case 'run':
+      settleForAction();
       ensureVisible();
       startRun();
       break;
     case 'jump':
+      settleForAction();
       ensureVisible();
       startJump();
       break;
     case 'skate':
+      settleForAction();
       startSkate();
       break;
     case 'scale-small':
@@ -1063,7 +1863,8 @@ function handleAction(action) {
     case 'toggle-ontop':
       setOnTop(!cfg.onTop);
       break;
-    case 'hide':
+    case 'hide-tray':
+      settleForAction();
       pointerEnabled = false;
       win.setIgnoreMouseEvents(true, { forward: true });
       win.hide();
@@ -1102,7 +1903,7 @@ function createWindow() {
     },
   });
 
-  win.setAlwaysOnTop(cfg.onTop, 'floating');
+  win.setAlwaysOnTop(cfg.onTop, 'normal');
   win.setIgnoreMouseEvents(true, { forward: true });
   pointerEnabled = false;
   win.loadFile('index.html');
@@ -1136,11 +1937,29 @@ function reveal() {
     bringToFront();
   }, 120);
   sendSettings();
-  if (isNight()) {
-    express('sleepy', { speech: '姐姐这么晚还没睡呀……', effect: 'zzz', hold: 4000 });
+  socialQuietUntil = Date.now() + 8000;
+  if (cfg.firstRun) {
+    cfg.firstRun = false;
+    saveConfig();
+    express('wave', {
+      speech: 'wool！wool！姐姐你好，我是呜旻，一只机器狼。',
+      effect: 'sparkle',
+      hold: 4800,
+    });
+    setTimeout(() => {
+      send('pet:bubble', {
+        text: '以后呜旻就住在桌面啦，右键可以和呜旻一起玩。请多关照！',
+        hold: 4200,
+      });
+    }, 5600);
+  } else if (isNight()) {
+    express('sleepy', { speech: '姐姐这么晚还没睡呀……呜旻陪你，困了就一起睡。', effect: 'zzz', hold: 4000 });
+  } else if (cfg.winter) {
+    express('wave', { speech: 'wool！wool！姐姐回来啦，外面下着雪呢。', effect: 'sparkle', hold: 3800 });
   } else {
-    express('wave', { speech: '姐姐好呀，我是兔玹～', effect: 'sparkle', hold: 3600 });
+    express('wave', { speech: 'wool！wool！姐姐！呜旻在这里～', effect: 'sparkle', hold: 3800 });
   }
+  writePresence();
   lastTick = Date.now();
   loopTimer = setInterval(tick, 16);
   energyTimer = setInterval(() => {
@@ -1149,7 +1968,7 @@ function reveal() {
       const slept = Date.now() - sleepSince;
       if ((slept > 30000 && cfg.energy >= 99) || slept > 240000) wake();
     } else {
-      cfg.energy = Math.max(0, cfg.energy - 0.03);
+      cfg.energy = Math.max(0, cfg.energy - (cfg.winter ? 0.02 : 0.03));
       if (cfg.energy <= 15 && mode === 'idle' && !taskActive && currentSprite !== 'skate') goSleep(true);
     }
   }, 1000);
@@ -1160,6 +1979,42 @@ function reveal() {
 
 ipcMain.on('pet:loaded', () => {
   reveal();
+});
+
+ipcMain.handle('blocks:load', () => ({
+  best: Number(cfg.blocksBest) || 0,
+}));
+
+ipcMain.handle('blocks:submit', (_e, score) => {
+  const safe = Math.max(0, Math.min(9999, Math.round(Number(score) || 0)));
+  const isBest = safe > (Number(cfg.blocksBest) || 0);
+  if (isBest) cfg.blocksBest = safe;
+  cfg.energy = Math.min(100, cfg.energy + 4);
+  saveConfig();
+  if (isBest) {
+    express('happy', {
+      speech: `wool！wool！姐姐搭了 ${safe} 层，新纪录！呜旻在下面看得心服口服！`,
+      effect: 'hearts',
+      hold: 5200,
+    });
+  } else if (safe <= 1) {
+    express('sleepy', {
+      speech: '这次一块都没搭住……没关系，呜旻帮你把积木捡回来啦，再来一次嘛。',
+      effect: 'sweat',
+      hold: 4600,
+    });
+  } else {
+    express('happy', {
+      speech: `姐姐搭了 ${safe} 层！呜旻把每一层都数清楚啦。`,
+      effect: 'sparkle',
+      hold: 4200,
+    });
+  }
+  return { best: Number(cfg.blocksBest) || 0, isBest };
+});
+
+ipcMain.on('blocks:close', () => {
+  if (blocksWin && !blocksWin.isDestroyed()) blocksWin.close();
 });
 
 ipcMain.on('pet:bubble-rect', (_e, rect) => {
@@ -1180,6 +2035,7 @@ ipcMain.on('pet:drag-start', (_e, info) => {
   if (mode === 'fall' || mode === 'drag') {
     /* still allow grabbing mid-fall */
   }
+  cancelGame();
   stopWalk();
   mode = 'drag';
   drag.active = true;
@@ -1191,10 +2047,11 @@ ipcMain.on('pet:drag-start', (_e, info) => {
   express('surprised', { speech: pick(grabLines), effect: 'exclamation', hold: 3000 });
 });
 
-ipcMain.on('pet:drag-move', (_e, pos) => {
+ipcMain.on('pet:drag-move', () => {
   if (!drag.active || !win) return;
-  const x = Math.round(Number(pos.x) - drag.offsetX);
-  const y = Math.round(Number(pos.y) - drag.offsetY);
+  const point = screen.getCursorScreenPoint();
+  const x = Math.round(point.x - drag.offsetX);
+  const y = Math.round(point.y - drag.offsetY);
   win.setPosition(x, y, false);
   drag.samples.push({ t: Date.now(), x, y });
   if (drag.samples.length > 12) drag.samples.shift();
@@ -1244,11 +2101,13 @@ if (!gotLock) {
     clearTimeout(exprTimer);
     clearTimeout(taskHideTimer);
     clearTimeout(attentionTimer);
+    if (blocksWin && !blocksWin.isDestroyed()) blocksWin.close();
     saveConfig();
   });
 
   app.on('display-metrics-changed', () => {
     if (!win || !revealed || drag.active) return;
+    if (mode === 'game') return;
     const b = win.getBounds();
     const wa = workAreaForWindow();
     win.setPosition(
@@ -1256,5 +2115,9 @@ if (!gotLock) {
       Math.min(b.y, groundFor(wa)),
       false
     );
+    setTimeout(ensureOnScreen, 400);
   });
+
+  app.on('display-added', () => setTimeout(ensureOnScreen, 400));
+  app.on('display-removed', () => setTimeout(ensureOnScreen, 400));
 }

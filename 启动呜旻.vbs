@@ -6,5 +6,5 @@ exe = base & "\node_modules\electron\dist\electron.exe"
 If fso.FileExists(exe) Then
   sh.Run """" & exe & """ """ & base & """", 0, False
 Else
-  MsgBox "Electron not found. Run npm install in the pet folder first.", 48, "Tu Xuan"
+  MsgBox "Electron not found. Run npm install in the pet folder first.", 48, "Wumin"
 End If

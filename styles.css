@@ -24,6 +24,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -209,6 +210,24 @@ body {
   transform: translateY(0) scale(1);
 }
 
+.bubble-tag {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 3px;
+  padding: 0 7px;
+  border: 1.5px solid #16171a;
+  border-radius: 999px;
+  background: #ffe3ef;
+  color: #d4517f;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
+.bubble-text {
+  display: block;
+}
+
 .bubble::after {
   content: "";
   position: absolute;
@@ -225,12 +244,14 @@ body {
 
 .pet {
   position: relative;
+  left: 0;
   display: block;
   flex: none;
   pointer-events: auto;
   cursor: grab;
   transform-origin: 50% 100%;
   animation: breathe 5.2s ease-in-out infinite;
+  transition: left 0.38s cubic-bezier(0.2, 1.3, 0.4, 1), opacity 0.3s ease;
   will-change: transform;
 }
 
@@ -259,7 +280,6 @@ body {
 
 .flipper {
   position: relative;
-  perspective: 700px;
   transform-origin: 50% 100%;
   transform: scaleX(var(--dir, 1));
   will-change: transform;
@@ -267,6 +287,27 @@ body {
 
 .pet.pop .flipper {
   animation: pop 0.38s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.pet.shivering .flipper {
+  animation: shiver 0.16s linear infinite;
+}
+
+#sprite {
+  transition: height 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes shiver {
+  0%,
+  100% {
+    transform: scaleX(var(--dir, 1)) translateX(0);
+  }
+  25% {
+    transform: scaleX(var(--dir, 1)) translateX(-2px) rotate(-0.6deg);
+  }
+  75% {
+    transform: scaleX(var(--dir, 1)) translateX(2px) rotate(0.6deg);
+  }
 }
 
 #sprite {
@@ -284,55 +325,6 @@ body {
   animation: skateSway 2.2s ease-in-out infinite;
 }
 
-.trick-board {
-  position: absolute;
-  z-index: 0;
-  bottom: 0;
-  left: 50%;
-  width: auto;
-  height: 100%;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-50%);
-  transform-origin: 50% 86%;
-  -webkit-user-drag: none;
-  will-change: transform;
-}
-
-.pet.kickflip .trick-board {
-  opacity: 1;
-  animation: kickflip var(--flip-duration, 760ms) cubic-bezier(0.42, 0.02, 0.58, 1) both;
-}
-
-.pet.kickflip .flipper {
-  animation: riderTilt var(--flip-duration, 760ms) ease-in-out both;
-}
-
-@keyframes kickflip {
-  0% {
-    transform: translateX(-50%) translateY(0) rotate3d(1, -0.25, 0, 0deg);
-  }
-  50% {
-    transform: translateX(-50%) translateY(10px) rotate3d(1, -0.25, 0, 180deg);
-  }
-  100% {
-    transform: translateX(-50%) translateY(0) rotate3d(1, -0.25, 0, 360deg);
-  }
-}
-
-@keyframes riderTilt {
-  0%,
-  100% {
-    transform: scaleX(var(--dir, 1)) rotate(0deg);
-  }
-  30% {
-    transform: scaleX(var(--dir, 1)) rotate(-3.5deg);
-  }
-  68% {
-    transform: scaleX(var(--dir, 1)) rotate(2.5deg);
-  }
-}
-
 @keyframes skateSway {
   0%,
   100% {
@@ -340,6 +332,23 @@ body {
   }
   50% {
     transform: translateX(10px) rotate(1.2deg);
+  }
+}
+
+.pet.kickflip .flipper {
+  transform-origin: 50% 55%;
+  animation: wholeSpin var(--flip-duration, 760ms) cubic-bezier(0.42, 0.02, 0.58, 1) both;
+}
+
+@keyframes wholeSpin {
+  0% {
+    transform: scaleX(var(--dir, 1)) rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: scaleX(var(--dir, 1)) rotate(180deg) translateY(-14px);
+  }
+  100% {
+    transform: scaleX(var(--dir, 1)) rotate(360deg) translateY(0);
   }
 }
 
@@ -435,8 +444,8 @@ body {
 }
 
 .fx.exclaim {
-  left: 51%;
-  top: -4%;
+  left: 2%;
+  top: 24%;
 }
 
 .fx.anger {
@@ -495,16 +504,16 @@ body {
 @keyframes waddle {
   0%,
   100% {
-    transform: translateY(0) rotate(-1.6deg);
+    transform: translateY(0);
   }
   25% {
-    transform: translateY(-2px) rotate(0deg);
+    transform: translateY(-2px);
   }
   50% {
-    transform: translateY(0) rotate(1.6deg);
+    transform: translateY(0);
   }
   75% {
-    transform: translateY(-2px) rotate(0deg);
+    transform: translateY(-2px);
   }
 }
 
@@ -671,6 +680,9 @@ body {
   position: fixed;
   z-index: 40;
   width: 208px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 6px;
   border: 2px solid #16171a;
   border-radius: 16px;
@@ -680,6 +692,17 @@ body {
   color: #1b1c20;
   transform-origin: 50% 100%;
   animation: menuIn 0.16s cubic-bezier(0.2, 1.3, 0.4, 1);
+  scrollbar-width: thin;
+  scrollbar-color: #c9d6e6 transparent;
+}
+
+.menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.menu::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #c9d6e6;
 }
 
 .menu[hidden] {
@@ -780,4 +803,108 @@ body {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+/* ---- 呜旻 additions ---- */
+
+.controller {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 1%;
+  width: 48%;
+  pointer-events: none;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 4px 5px rgba(10, 26, 48, 0.22));
+  animation: padIn 0.32s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+.controller[hidden] {
+  display: none;
+}
+
+.controller svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.pet.gaming .flipper {
+  animation: gameBob 0.9s ease-in-out infinite;
+}
+
+@keyframes padIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes gameBob {
+  0%,
+  100% {
+    transform: scaleX(var(--dir, 1)) translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: scaleX(var(--dir, 1)) translateY(-3px) rotate(1deg);
+  }
+}
+
+.fx.tofu {
+  border-radius: 2px;
+  background: linear-gradient(135deg, #fff6dd 0 36%, #f7dda2 62%, #e4b970 100%);
+  border: 1px solid #b88b43;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4), 0 2px 4px rgba(120, 78, 24, 0.22);
+  animation: floatUp 1.7s ease-out forwards;
+}
+
+.fx.tofu::after {
+  position: absolute;
+  top: 4%;
+  right: -3px;
+  width: 32%;
+  height: 88%;
+  border-radius: 50%;
+  background: #e2573f;
+  content: "";
+  opacity: 0.85;
+  transform: rotate(36deg);
+}
+
+
+.snow {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pet.sleeping {
+  animation: sleepBreathe 5.4s ease-in-out infinite;
+}
+
+.pet.sleeping #sprite {
+  filter: drop-shadow(0 5px 7px rgba(10, 26, 48, 0.16)) saturate(0.85) brightness(0.96);
+}
+
+@keyframes sleepBreathe {
+  0%,
+  100% {
+    transform: rotate(-7deg) translateY(5px) scale(1.012, 0.985);
+  }
+  50% {
+    transform: rotate(-8deg) translateY(8px) scale(0.995, 0.972);
+  }
+}
+
+.fx.meat {
+  font-size: 18px;
+  filter: drop-shadow(0 2px 3px rgba(30, 42, 80, 0.18));
+  animation: floatUp 1.7s ease-out forwards;
 }

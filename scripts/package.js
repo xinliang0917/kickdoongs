@@ -4,8 +4,8 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
 const ROOT = path.dirname(__dirname);
-const APP_NAME = '兔玹';
-const BUNDLE_ID = 'com.tuxuan.pet';
+const APP_NAME = '呜旻';
+const BUNDLE_ID = 'com.wumin.pet';
 const OUT_ROOT = process.env.PET_OUT ? path.resolve(process.env.PET_OUT) : path.join(ROOT, 'dist');
 const ELECTRON_DIST = path.join(ROOT, 'node_modules', 'electron', 'dist');
 const APP_FILES = ['main.js', 'preload.js', 'renderer.js', 'index.html', 'styles.css'];
@@ -38,9 +38,10 @@ function copyAppFiles(appDir, rootPkg) {
     fs.copyFileSync(path.join(ROOT, file), path.join(appDir, file));
   }
   fs.cpSync(path.join(ROOT, 'assets'), path.join(appDir, 'assets'), { recursive: true });
+  fs.cpSync(path.join(ROOT, 'renderer'), path.join(appDir, 'renderer'), { recursive: true });
 
   const appPkg = {
-    name: 'tuxuan-pet',
+    name: 'wumin-pet',
     productName: APP_NAME,
     version: rootPkg.version,
     description: rootPkg.description,

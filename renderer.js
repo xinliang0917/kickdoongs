@@ -1,11 +1,28 @@
-const NAMES = [
-  'idle', 'sleepy', 'happy', 'hot',
-  'giggle', 'bubbletea', 'bored', 'confused',
-  'love', 'shy', 'wave', 'goodnight',
-  'angry', 'back', 'surprised', 'cuddle', 'skate',
-];
+const FILES = ['idle', 'dizzy', 'sleepy', 'goodnight', 'skate'];
 
-const BASE_HEIGHT = 0.6;
+const ALIAS = {
+  idle: 'idle',
+  stand: 'idle',
+  happy: 'idle',
+  love: 'idle',
+  giggle: 'idle',
+  wave: 'idle',
+  cuddle: 'idle',
+  shy: 'idle',
+  choco: 'idle',
+  confused: 'dizzy',
+  angry: 'dizzy',
+  surprised: 'dizzy',
+  hot: 'dizzy',
+  unhappy: 'dizzy',
+  bored: 'sleepy',
+  sleepy: 'sleepy',
+  goodnight: 'goodnight',
+  skate: 'skate',
+};
+
+const NAMES = Object.keys(ALIAS);
+const BASE_HEIGHT = 0.36;
 const sprite = document.getElementById('sprite');
 const flipper = document.getElementById('flipper');
 const pet = document.getElementById('pet');
@@ -13,6 +30,7 @@ const bubble = document.getElementById('bubble');
 const effects = document.getElementById('effects');
 const menu = document.getElementById('menu');
 const sleepLabel = document.getElementById('sleep-label');
+const controller = document.getElementById('controller');
 const taskEl = document.getElementById('task');
 const taskStateEl = document.getElementById('task-state');
 const taskCountEl = document.getElementById('task-count');
@@ -20,14 +38,14 @@ const taskTitleEl = document.getElementById('task-title');
 const taskDetailEl = document.getElementById('task-detail');
 const taskFillEl = document.getElementById('task-fill');
 const taskBarEl = taskEl ? taskEl.querySelector('.task-bar') : null;
+const snowCanvas = document.getElementById('snow');
+const snowLabel = document.getElementById('snow-label');
+const snowCtx = snowCanvas ? snowCanvas.getContext('2d') : null;
 
 const sprites = {};
-const skateAnim = new Image();
-skateAnim.src = 'assets/pet/skate.webp';
-const riderAnim = new Image();
-riderAnim.src = 'assets/pet/skate_rider.png';
 
 let currentName = 'idle';
+let spriteMeta = null;
 let userScale = 1;
 let onTop = true;
 let dir = 1;
@@ -41,6 +59,10 @@ let bubbleHideTimer = null;
 let fxTimer = null;
 let angryTimer = null;
 let landTimer = null;
+let shiverTimer = null;
+let winter = false;
+let snowRaf = 0;
+let snowFlakes = [];
 
 const defaultEffects = {
   happy: 'hearts',
@@ -48,7 +70,8 @@ const defaultEffects = {
   cuddle: 'hearts',
   giggle: 'sparkle',
   wave: 'sparkle',
-  bubbletea: 'sparkle',
+  choco: 'sparkle',
+  stand: 'sparkle',
   goodnight: 'zzz',
   sleepy: 'zzz',
   confused: 'question',
@@ -75,8 +98,18 @@ function setDir(value) {
 function applyScale() {
   const image = sprites[currentName];
   if (!image) return;
-  const height = Math.max(48, Math.round(image.naturalHeight * BASE_HEIGHT * userScale));
+  let height = Math.max(48, Math.round(image.naturalHeight * BASE_HEIGHT * userScale));
+  const width = image.naturalWidth * (height / image.naturalHeight);
+  const maxWidth = window.innerWidth - 20;
+  if (width > maxWidth) height = Math.round((height * maxWidth) / width);
   sprite.style.height = `${height}px`;
+  const meta = spriteMeta && spriteMeta[currentName];
+  if (meta && meta.h) {
+    const topGap = (Number(meta.top) / meta.h) * height;
+    pet.style.marginTop = `${Math.round(Math.min(0, 6 - topGap))}px`;
+  } else {
+    pet.style.marginTop = '0px';
+  }
 }
 
 function bump() {
@@ -89,14 +122,13 @@ function bump() {
 }
 
 function setSprite(name) {
-  const image = sprites[name];
+  const image = sprites[name] || sprites.idle;
   if (!image) return;
-  currentName = name;
+  currentName = name in ALIAS ? name : 'idle';
   pet.classList.remove('kickflip');
   pet.style.removeProperty('--flip-duration');
-  const skating = name === 'skate';
-  sprite.src = skating ? 'assets/pet/skate.webp' : image.src;
-  sprite.classList.toggle('skating', skating);
+  sprite.src = image.src;
+  sprite.classList.toggle('skating', currentName === 'skate');
   applyDir();
   applyScale();
   bump();
@@ -104,22 +136,16 @@ function setSprite(name) {
 
 function startKickflip(duration) {
   if (currentName !== 'skate') return;
-  const ms = clamp(Number(duration) || 760, 420, 1000);
+  const ms = clamp(Number(duration) || 760, 420, 1100);
   pet.style.setProperty('--flip-duration', `${ms}ms`);
+  pet.classList.remove('kickflip');
+  void pet.offsetWidth;
   pet.classList.add('kickflip');
-  sprite.classList.remove('skating');
-  sprite.src = 'assets/pet/skate_rider.png';
-  applyScale();
 }
 
 function endKickflip() {
   pet.classList.remove('kickflip');
   pet.style.removeProperty('--flip-duration');
-  if (currentName === 'skate') {
-    sprite.src = 'assets/pet/skate.webp';
-    sprite.classList.add('skating');
-    applyScale();
-  }
 }
 
 function sendBubbleRect() {
@@ -131,7 +157,7 @@ function sendBubbleRect() {
   window.pet.bubbleRect({ x: r.left, y: r.top, w: r.width, h: r.height });
 }
 
-function showBubble(text, hold) {
+function showBubble(text, hold, tag) {
   clearTimeout(bubbleTimer);
   clearTimeout(bubbleHideTimer);
   if (!text) {
@@ -139,13 +165,24 @@ function showBubble(text, hold) {
     return;
   }
   bubble.hidden = false;
-  bubble.textContent = text;
+  bubble.textContent = '';
+  if (tag) {
+    const tagEl = document.createElement('span');
+    tagEl.className = 'bubble-tag';
+    tagEl.textContent = tag;
+    const textEl = document.createElement('span');
+    textEl.className = 'bubble-text';
+    textEl.textContent = text;
+    bubble.append(tagEl, textEl);
+  } else {
+    bubble.textContent = text;
+  }
   bubble.classList.remove('show');
   void bubble.offsetWidth;
   bubble.classList.add('show');
   sendBubbleRect();
   setTimeout(sendBubbleRect, 230);
-  const ms = clamp(Number(hold) || 3600, 1600, 5200);
+  const ms = clamp(Number(hold) || 3600, 1600, 6000);
   bubbleTimer = setTimeout(hideBubble, ms);
 }
 
@@ -168,6 +205,8 @@ function clearEffects() {
   effects.innerHTML = '';
   effects.dataset.type = '';
   pet.classList.remove('angry');
+  pet.classList.remove('shivering');
+  clearTimeout(shiverTimer);
 }
 
 function makeFx(cls, text) {
@@ -224,23 +263,35 @@ function setEffect(type, persistent) {
     return;
   }
 
-  if (type === 'veggies') {
+  if (type === 'meat') {
     for (let i = 0; i < 5; i += 1) {
-      const veg = makeFx('veg', '');
-      const size = 10 + Math.random() * 7;
-      const onLeft = i % 2 === 0;
-      veg.style.left = onLeft
-        ? `${5 + Math.random() * 15}%`
-        : `${80 + Math.random() * 15}%`;
-      veg.style.bottom = `${36 + Math.random() * 30}%`;
-      veg.style.width = `${size}px`;
-      veg.style.height = `${size}px`;
-      veg.style.setProperty('--dx', `${(onLeft ? 1 : -1) * (8 + Math.random() * 14)}px`);
-      veg.style.animationDelay = `${i * 0.1 + Math.random() * 0.1}s`;
+      const meat = makeFx('meat', '🍖');
+      meat.style.left = `${14 + Math.random() * 66}%`;
+      meat.style.bottom = `${30 + Math.random() * 30}%`;
+      meat.style.fontSize = `${14 + Math.random() * 8}px`;
+      meat.style.setProperty('--dx', `${Math.random() * 30 - 15}px`);
+      meat.style.animationDelay = `${i * 0.09 + Math.random() * 0.1}s`;
     }
     fxTimer = setTimeout(() => {
-      if (effects.dataset.type === 'veggies') effects.innerHTML = '';
+      if (effects.dataset.type === 'meat') effects.innerHTML = '';
     }, 2500);
+    return;
+  }
+
+  if (type === 'tofu') {
+    for (let i = 0; i < 6; i += 1) {
+      const tofu = makeFx('tofu', '');
+      tofu.style.left = `${8 + Math.random() * 78}%`;
+      tofu.style.bottom = `${30 + Math.random() * 32}%`;
+      const size = 10 + Math.random() * 8;
+      tofu.style.width = `${size}px`;
+      tofu.style.height = `${size}px`;
+      tofu.style.setProperty('--dx', `${Math.random() * 30 - 15}px`);
+      tofu.style.animationDelay = `${i * 0.08 + Math.random() * 0.1}s`;
+    }
+    fxTimer = setTimeout(() => {
+      if (effects.dataset.type === 'tofu') effects.innerHTML = '';
+    }, 2600);
     return;
   }
 
@@ -256,6 +307,12 @@ function setEffect(type, persistent) {
     angryTimer = setTimeout(() => pet.classList.remove('angry'), 1350);
   } else if (type === 'sweat') {
     makeFx('sweat', '');
+  } else if (type === 'shiver') {
+    pet.classList.remove('shivering');
+    void pet.offsetWidth;
+    pet.classList.add('shivering');
+    clearTimeout(shiverTimer);
+    shiverTimer = setTimeout(() => pet.classList.remove('shivering'), 2400);
   }
 
   fxTimer = setTimeout(() => {
@@ -273,7 +330,8 @@ function spawnDust(impact) {
 }
 
 function updateMenuState() {
-  if (sleepLabel) sleepLabel.textContent = sleeping ? '叫醒它' : '睡一觉';
+  if (sleepLabel) sleepLabel.textContent = sleeping ? '叫醒呜旻' : '睡一觉';
+  if (snowLabel) snowLabel.textContent = winter ? '收起这场雪' : '下一场雪';
   const check = menu.querySelector('[data-action="toggle-ontop"]');
   if (check) check.classList.toggle('checked', onTop);
   menu.querySelectorAll('.chip').forEach((chip) => {
@@ -292,7 +350,8 @@ function openMenu(x, y) {
   const mh = menu.offsetHeight || 320;
   const left = clamp(x, 8, window.innerWidth - mw - 8);
   let top = y - mh - 12;
-  if (top < 8) top = clamp(y + 14, 8, window.innerHeight - mh - 8);
+  if (top < 8) top = 8;
+  if (top + mh > window.innerHeight - 8) top = Math.max(8, window.innerHeight - mh - 8);
   menu.style.left = `${Math.round(left)}px`;
   menu.style.top = `${Math.round(top)}px`;
   menu.style.visibility = '';
@@ -369,6 +428,69 @@ function onPetPointerDown(e) {
   window.addEventListener('pointercancel', onPointerUp);
 }
 
+function resizeSnow() {
+  if (!snowCanvas || !snowCtx) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  snowCanvas.width = Math.round(window.innerWidth * dpr);
+  snowCanvas.height = Math.round(window.innerHeight * dpr);
+  snowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function makeSnowFlake(front) {
+  return {
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight - window.innerHeight,
+    r: front ? 1.8 + Math.random() * 1.8 : 0.8 + Math.random() * 1.5,
+    vy: front ? 18 + Math.random() * 24 : 12 + Math.random() * 18,
+    vx: Math.random() * 10 - 5,
+    sway: 4 + Math.random() * 10,
+    phase: Math.random() * Math.PI * 2,
+    alpha: front ? 0.35 + Math.random() * 0.3 : 0.5 + Math.random() * 0.45,
+  };
+}
+
+function startSnow() {
+  if (!snowCanvas || !snowCtx) return;
+  resizeSnow();
+  if (!snowFlakes.length) {
+    snowFlakes = Array.from({ length: 46 }, () => makeSnowFlake(false));
+  }
+  if (snowRaf) return;
+  let last = performance.now();
+  const draw = (now) => {
+    if (!winter) return;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    snowCtx.clearRect(0, 0, w, h);
+    snowCtx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    snowFlakes.forEach((f) => {
+      f.y += f.vy * dt;
+      f.x += (f.vx + Math.sin(f.phase + now / 900) * f.sway) * dt;
+      if (f.y > h + 4) {
+        f.y = -4;
+        f.x = Math.random() * w;
+      }
+      if (f.x < -4) f.x = w + 4;
+      if (f.x > w + 4) f.x = -4;
+      snowCtx.globalAlpha = f.alpha;
+      snowCtx.beginPath();
+      snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      snowCtx.fill();
+    });
+    snowCtx.globalAlpha = 1;
+    snowRaf = requestAnimationFrame(draw);
+  };
+  snowRaf = requestAnimationFrame(draw);
+}
+
+function stopSnow() {
+  cancelAnimationFrame(snowRaf);
+  snowRaf = 0;
+  if (snowCtx) snowCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+}
+
 function setupEvents() {
   document.addEventListener('pointerdown', (e) => {
     if (menuOpen && !menu.contains(e.target)) closeMenu();
@@ -410,17 +532,18 @@ function setupEvents() {
     setSprite(data.name);
     const effect = data.effect === undefined ? defaultEffects[data.name] : data.effect;
     setEffect(effect || null, !!data.persistent);
-    showBubble(data.speech, data.hold);
+    showBubble(data.speech, data.hold, data.tag);
     if (data.name === 'goodnight' && data.persistent) {
       sleeping = true;
     } else if (data.name !== 'goodnight') {
       sleeping = false;
     }
+    pet.classList.toggle('sleeping', sleeping);
     updateMenuState();
   });
 
   window.pet.onWalking((data) => {
-    setDir(data && data.dir);
+    if (data && (data.dir === 1 || data.dir === -1)) setDir(data.dir);
     const moving = !!(data && data.on);
     const running = moving && !!data.run;
     pet.classList.toggle('walking', moving && !running);
@@ -453,12 +576,27 @@ function setupEvents() {
     endKickflip();
   });
 
+  window.addEventListener('resize', () => {
+    if (winter) resizeSnow();
+  });
+
   window.pet.onSettings((data) => {
     if (!data) return;
     userScale = Number(data.scale) || 1;
     onTop = !!data.onTop;
+    if (data.manifest) spriteMeta = data.manifest;
+    const nextWinter = !!data.winter;
+    if (nextWinter !== winter) {
+      winter = nextWinter;
+      if (winter) startSnow();
+      else stopSnow();
+    }
     applyScale();
     updateMenuState();
+  });
+
+  window.pet.onGame((data) => {
+    setGaming(data && data.on);
   });
 
   window.pet.onTask((data) => {
@@ -527,20 +665,26 @@ function setupEvents() {
 }
 
 function loadSprites() {
+  const loaded = {};
   return Promise.all(
-    NAMES.map(
+    FILES.map(
       (name) =>
         new Promise((resolve) => {
           const image = new Image();
           image.onload = () => {
-            sprites[name] = image;
+            loaded[name] = image;
             resolve();
           };
           image.onerror = () => resolve();
           image.src = `assets/pet/${name}.png`;
         })
     )
-  );
+  ).then(() => {
+    NAMES.forEach((name) => {
+      const file = ALIAS[name] || name;
+      if (loaded[file]) sprites[name] = loaded[file];
+    });
+  });
 }
 
 async function boot() {

@@ -1,8 +1,9 @@
-﻿{
-  "name": "blue-panda-pet",
+{
+  "name": "wumin-pet",
+  "productName": "呜旻",
   "version": "1.0.0",
   "private": true,
-  "description": "An interactive desktop pet built from a sticker sheet.",
+  "description": "呜旻 · 机器狼桌宠",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

@@ -7,10 +7,11 @@
       content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>兔玹</title>
+    <title>呜旻</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <canvas id="snow" class="snow" aria-hidden="true"></canvas>
     <div id="stage">
       <div id="task" class="task" hidden>
         <div class="task-head">
@@ -25,8 +26,8 @@
       <div id="bubble" class="bubble" hidden></div>
       <div id="pet" class="pet">
         <div id="flipper" class="flipper">
-          <img id="board" class="trick-board" src="assets/pet/skate_board.png" alt="" draggable="false" />
-          <img id="sprite" alt="兔玹" draggable="false" />
+          <img id="sprite" alt="呜旻" draggable="false" />
+
         </div>
         <div id="effects" class="effects" aria-hidden="true"></div>
       </div>
@@ -34,13 +35,14 @@
 
     <div id="menu" class="menu" hidden>
       <button class="item" data-action="pet"><span>摸摸头</span></button>
-      <button class="item" data-action="feed-veggies"><span>喂蔬菜</span></button>
-      <button class="item" data-action="feed"><span>喂奶茶</span></button>
+      <button class="item" data-action="feed"><span>喂肉肉</span></button>
+      <button class="item" data-action="game"><span>搭积木</span></button>
       <button class="item" data-action="sleep"><span id="sleep-label">睡一觉</span></button>
       <button class="item" data-action="walk"><span>去散步</span></button>
       <button class="item" data-action="run"><span>跑一跑</span></button>
       <button class="item" data-action="jump"><span>跳一跳</span></button>
       <button class="item" data-action="skate"><span>玩滑板</span></button>
+      <button class="item" data-action="snow"><span id="snow-label">下一场雪</span></button>
       <div class="sep"></div>
       <div class="group">
         <span class="group-label">大小</span>
@@ -54,7 +56,7 @@
         <span>总在最前</span><span class="mark"></span>
       </button>
       <div class="sep"></div>
-      <button class="item" data-action="hide"><span>隐藏到托盘</span></button>
+      <button class="item" data-action="hide-tray"><span>隐藏到托盘</span></button>
       <button class="item danger" data-action="quit"><span>退出</span></button>
     </div>
 
