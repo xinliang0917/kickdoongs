@@ -14,9 +14,12 @@ contextBridge.exposeInMainWorld('pet', {
   onFacing: (cb) => ipcRenderer.on('pet:facing', (_e, data) => cb(data)),
   onBubble: (cb) => ipcRenderer.on('pet:bubble', (_e, data) => cb(data)),
   onEffect: (cb) => ipcRenderer.on('pet:effect', (_e, data) => cb(data)),
+  onKickflip: (cb) => ipcRenderer.on('pet:kickflip', (_e, data) => cb(data)),
+  onKickflipEnd: (cb) => ipcRenderer.on('pet:kickflip-end', () => cb()),
   onSettings: (cb) => ipcRenderer.on('pet:settings', (_e, data) => cb(data)),
   onTask: (cb) => ipcRenderer.on('pet:task', (_e, data) => cb(data)),
   onLand: (cb) => ipcRenderer.on('pet:land', (_e, data) => cb(data)),
+  onPeek: (cb) => ipcRenderer.on('pet:peek', (_e, data) => cb(data)),
   onResetInput: (cb) => ipcRenderer.on('pet:reset-input', () => cb()),
   onCloseMenu: (cb) => ipcRenderer.on('pet:close-menu', () => cb()),
 });

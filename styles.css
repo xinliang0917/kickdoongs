@@ -209,6 +209,24 @@ body {
   transform: translateY(0) scale(1);
 }
 
+.bubble-tag {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 3px;
+  padding: 0 7px;
+  border: 1.5px solid #16171a;
+  border-radius: 999px;
+  background: #ffe3ef;
+  color: #d4517f;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
+.bubble-text {
+  display: block;
+}
+
 .bubble::after {
   content: "";
   position: absolute;
@@ -253,13 +271,35 @@ body {
   animation: squish 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
-.pet.angry {
+body.peek-right .pet {
+  animation: peekSwayRight 4.8s ease-in-out infinite;
+}
+
+body.peek-left .pet {
+  animation: peekSwayLeft 4.8s ease-in-out infinite;
+}
+
+body.peek-right .fx.z.z1 {
+  right: auto;
+  left: 4%;
+}
+
+body.peek-right .fx.z.z2 {
+  right: auto;
+  left: -2%;
+}
+
+body.peek-right .fx.z.z3 {
+  right: auto;
+  left: 9%;
+}
+
+.pet.angry {.pet.angry {
   animation: shake 0.42s linear 3;
 }
 
 .flipper {
   position: relative;
-  perspective: 700px;
   transform-origin: 50% 100%;
   transform: scaleX(var(--dir, 1));
   will-change: transform;
@@ -312,6 +352,54 @@ body {
   }
   50% {
     transform: translateX(10px) rotate(1.2deg);
+  }
+}
+
+.trick-board {
+  position: absolute;
+  z-index: 0;
+  bottom: 5.54%;
+  left: 15.25%;
+  width: 69.5%;
+  height: 10.714%;
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: 50% 21%;
+  -webkit-user-drag: none;
+  will-change: transform;
+}
+
+.pet.kickflip .trick-board {
+  opacity: 1;
+  animation: kickflip var(--flip-duration, 760ms) cubic-bezier(0.42, 0.02, 0.58, 1) both;
+}
+
+.pet.kickflip .flipper {
+  animation: riderTilt var(--flip-duration, 760ms) ease-in-out both;
+}
+
+@keyframes kickflip {
+  0% {
+    transform: translateY(0) perspective(700px) rotate3d(1, -0.25, 0, 0deg);
+  }
+  50% {
+    transform: translateY(10px) perspective(700px) rotate3d(1, -0.25, 0, 180deg);
+  }
+  100% {
+    transform: translateY(0) perspective(700px) rotate3d(1, -0.25, 0, 360deg);
+  }
+}
+
+@keyframes riderTilt {
+  0%,
+  100% {
+    transform: scaleX(var(--dir, 1)) rotate(0deg);
+  }
+  30% {
+    transform: scaleX(var(--dir, 1)) rotate(-3.5deg);
+  }
+  68% {
+    transform: scaleX(var(--dir, 1)) rotate(2.5deg);
   }
 }
 
@@ -407,8 +495,8 @@ body {
 }
 
 .fx.exclaim {
-  left: 51%;
-  top: -4%;
+  left: 2%;
+  top: 24%;
 }
 
 .fx.anger {
@@ -464,19 +552,39 @@ body {
   }
 }
 
-@keyframes waddle {
+@keyframes peekSwayRight {
+  0%,
+  100% {
+    transform: translateY(0) rotate(1.6deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(-0.8deg);
+  }
+}
+
+@keyframes peekSwayLeft {
   0%,
   100% {
     transform: translateY(0) rotate(-1.6deg);
   }
+  50% {
+    transform: translateY(-3px) rotate(0.8deg);
+  }
+}
+
+@keyframes waddle {@keyframes waddle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
   25% {
-    transform: translateY(-2px) rotate(0deg);
+    transform: translateY(-2px);
   }
   50% {
-    transform: translateY(0) rotate(1.6deg);
+    transform: translateY(0);
   }
   75% {
-    transform: translateY(-2px) rotate(0deg);
+    transform: translateY(-2px);
   }
 }
 

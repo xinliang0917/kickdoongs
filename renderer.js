@@ -5,8 +5,9 @@ const NAMES = [
   'angry', 'back', 'surprised', 'cuddle', 'skate',
 ];
 
-const BASE_HEIGHT = 0.36;
+const BASE_HEIGHT = 0.45;
 const sprite = document.getElementById('sprite');
+const board = document.getElementById('board');
 const flipper = document.getElementById('flipper');
 const pet = document.getElementById('pet');
 const bubble = document.getElementById('bubble');
@@ -22,6 +23,8 @@ const taskFillEl = document.getElementById('task-fill');
 const taskBarEl = taskEl ? taskEl.querySelector('.task-bar') : null;
 
 const sprites = {};
+const riderAnim = new Image();
+riderAnim.src = 'assets/pet/skate_rider.png';
 
 let currentName = 'idle';
 let spriteMeta = null;
@@ -96,12 +99,34 @@ function setSprite(name) {
   const image = sprites[name];
   if (!image) return;
   currentName = name;
+  pet.classList.remove('kickflip');
+  pet.style.removeProperty('--flip-duration');
   const skating = name === 'skate';
   sprite.src = image.src;
   sprite.classList.toggle('skating', skating);
   applyDir();
   applyScale();
   bump();
+}
+
+function startKickflip(duration) {
+  if (currentName !== 'skate') return;
+  const ms = clamp(Number(duration) || 760, 420, 1000);
+  pet.style.setProperty('--flip-duration', `${ms}ms`);
+  pet.classList.add('kickflip');
+  sprite.classList.remove('skating');
+  sprite.src = 'assets/pet/skate_rider.png';
+  applyScale();
+}
+
+function endKickflip() {
+  pet.classList.remove('kickflip');
+  pet.style.removeProperty('--flip-duration');
+  if (currentName === 'skate') {
+    sprite.src = sprites.skate.src;
+    sprite.classList.add('skating');
+    applyScale();
+  }
 }
 
 function sendBubbleRect() {
@@ -113,7 +138,7 @@ function sendBubbleRect() {
   window.pet.bubbleRect({ x: r.left, y: r.top, w: r.width, h: r.height });
 }
 
-function showBubble(text, hold) {
+function showBubble(text, hold, tag) {
   clearTimeout(bubbleTimer);
   clearTimeout(bubbleHideTimer);
   if (!text) {
@@ -121,7 +146,18 @@ function showBubble(text, hold) {
     return;
   }
   bubble.hidden = false;
-  bubble.textContent = text;
+  bubble.textContent = '';
+  if (tag) {
+    const tagEl = document.createElement('span');
+    tagEl.className = 'bubble-tag';
+    tagEl.textContent = tag;
+    const textEl = document.createElement('span');
+    textEl.className = 'bubble-text';
+    textEl.textContent = text;
+    bubble.append(tagEl, textEl);
+  } else {
+    bubble.textContent = text;
+  }
   bubble.classList.remove('show');
   void bubble.offsetWidth;
   bubble.classList.add('show');
@@ -400,7 +436,7 @@ function setupEvents() {
     setSprite(data.name);
     const effect = data.effect === undefined ? defaultEffects[data.name] : data.effect;
     setEffect(effect || null, !!data.persistent);
-    showBubble(data.speech, data.hold);
+    showBubble(data.speech, data.hold, data.tag);
     if (data.name === 'goodnight' && data.persistent) {
       sleeping = true;
     } else if (data.name !== 'goodnight') {
@@ -410,7 +446,7 @@ function setupEvents() {
   });
 
   window.pet.onWalking((data) => {
-    setDir(data && data.dir);
+    if (data && (data.dir === 1 || data.dir === -1)) setDir(data.dir);
     const moving = !!(data && data.on);
     const running = moving && !!data.run;
     pet.classList.toggle('walking', moving && !running);
@@ -435,6 +471,14 @@ function setupEvents() {
     setEffect(data.type, !!data.persistent);
   });
 
+  window.pet.onKickflip((data) => {
+    startKickflip(data && data.duration);
+  });
+
+  window.pet.onKickflipEnd(() => {
+    endKickflip();
+  });
+
   window.pet.onSettings((data) => {
     if (!data) return;
     userScale = Number(data.scale) || 1;
@@ -442,6 +486,14 @@ function setupEvents() {
     if (data.manifest) spriteMeta = data.manifest;
     applyScale();
     updateMenuState();
+  });
+
+  window.pet.onPeek((data) => {
+    const on = !!(data && data.on);
+    const side = Number(data && data.side) < 0 ? 'left' : 'right';
+    document.body.classList.toggle('peek', on);
+    document.body.classList.toggle('peek-left', on && side === 'left');
+    document.body.classList.toggle('peek-right', on && side === 'right');
   });
 
   window.pet.onTask((data) => {
