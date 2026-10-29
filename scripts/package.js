@@ -101,7 +101,15 @@ function retrySync(label, fn, attempts = 10, delayMs = 1000) {
 function resolveMakensis() {
   for (const candidate of MAKENSIS_CANDIDATES) {
     if (!candidate) continue;
-    if (candidate === 'makensis.exe' || fs.existsSync(candidate)) return candidate;
+    if (candidate === 'makensis.exe') {
+      try {
+        execFileSync('where.exe', ['makensis.exe'], { stdio: 'ignore' });
+        return candidate;
+      } catch {
+        continue;
+      }
+    }
+    if (fs.existsSync(candidate)) return candidate;
   }
   return null;
 }
