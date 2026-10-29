@@ -1,4 +1,4 @@
-﻿const FILES = ['idle', 'dizzy', 'sleepy', 'goodnight', 'skate'];
+const FILES = ['idle', 'dizzy', 'sleepy', 'goodnight', 'skate'];
 
 const ALIAS = {
   idle: 'idle',
@@ -50,6 +50,7 @@ let dir = 1;
 let sleeping = false;
 let menuOpen = false;
 let dragging = false;
+let dragWatchTimer = null;
 let down = null;
 let popTimer = null;
 let bubbleTimer = null;
@@ -361,8 +362,10 @@ function onPointerMove(e) {
     hideBubble();
     pet.classList.add('dragging');
     window.pet.dragStart({ offsetX: down.offsetX, offsetY: down.offsetY });
+    armDragWatch();
   }
   window.pet.dragMove({ x: e.screenX, y: e.screenY });
+  armDragWatch();
 }
 
 function onPointerUp(e) {
@@ -372,6 +375,8 @@ function onPointerUp(e) {
   down = null;
   dragging = false;
   detachDragListeners();
+  clearTimeout(dragWatchTimer);
+  dragWatchTimer = null;
   try {
     sprite.releasePointerCapture(id);
   } catch {
@@ -440,6 +445,10 @@ function setupEvents() {
   bubble.addEventListener('pointerdown', (e) => {
     e.stopPropagation();
     hideBubble();
+  });
+
+  window.addEventListener('blur', () => {
+    if (dragging) endPointer('abort');
   });
 
   menu.addEventListener('click', (e) => {
