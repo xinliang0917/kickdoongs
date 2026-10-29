@@ -155,7 +155,6 @@ jobs:
         with:
           name: ${{ env.PET_SLUG }}-windows-x64
           path: |
-            dist/*.zip
             dist/*-setup.exe
             dist/package-manifest.txt
           if-no-files-found: error
