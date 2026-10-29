@@ -298,7 +298,7 @@ body.peek-right .fx.z.z3 {
   left: 9%;
 }
 
-.pet.angry {.pet.angry {
+.pet.angry {
   animation: shake 0.42s linear 3;
 }
 
@@ -576,7 +576,7 @@ body.peek-right .fx.z.z3 {
   }
 }
 
-@keyframes waddle {@keyframes waddle {
+@keyframes waddle {
   0%,
   100% {
     transform: translateY(0);
