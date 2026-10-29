@@ -312,7 +312,7 @@ function buildWindows(rootPkg) {
         [
           '-NoProfile',
           '-Command',
-          `Compress-Archive -LiteralPath '${target}' -DestinationPath '${zip}' -Force`,
+          `Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${target}', '${zip}', [System.IO.Compression.CompressionLevel]::Optimal, $true)`,
         ],
         { stdio: 'inherit' }
       );
