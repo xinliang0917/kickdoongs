@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('pet', {
   onTask: (cb) => ipcRenderer.on('pet:task', (_e, data) => cb(data)),
   onLand: (cb) => ipcRenderer.on('pet:land', (_e, data) => cb(data)),
   onPeek: (cb) => ipcRenderer.on('pet:peek', (_e, data) => cb(data)),
+  onCharge: (cb) => ipcRenderer.on('pet:charge', (_e, data) => cb(data)),
   onHide: (cb) => ipcRenderer.on('pet:hide', (_e, data) => cb(data)),
   onGame: (cb) => ipcRenderer.on('pet:game', (_e, data) => cb(data)),
   onResetInput: (cb) => ipcRenderer.on('pet:reset-input', () => cb()),

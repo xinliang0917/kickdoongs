@@ -42,6 +42,9 @@ let loopTimer = null;
 let behaviorTimer = null;
 let exprTimer = null;
 let energyTimer = null;
+let chargeState = null;
+let chargeTimer = null;
+let chargeHideTimer = null;
 let lastTick = Date.now();
 let lastScreenCheck = 0;
 let sleepSince = 0;
@@ -560,6 +563,7 @@ function checkPeekIdle() {
 }
 
 function stopWalk() {
+  cancelCharge(true);
   stopSkate();
   cancelSocialAction();
   if (mode === 'peek') exitPeek(true);
@@ -834,6 +838,116 @@ function wake() {
   mode = 'idle';
   cfg.energy = Math.max(cfg.energy, 40);
   express('sleepy', { speech: pick(wakeLines), hold: 2600 });
+}
+
+function beginCharge(kind, name, duration = 4200) {
+  if (!win || win.isDestroyed() || !revealed || drag.active) return false;
+  if (mode === 'sleep') wake();
+  if (mode !== 'idle') return false;
+  cancelCharge(true);
+  const title = kind === 'user' ? '给姐姐充电' : `给${name}充电`;
+  const note = kind === 'user' ? '把手放上来，喵鳐给你充电～' : '分你一点电量～';
+  chargeState = {
+    kind,
+    name,
+    title,
+    note,
+    startedAt: Date.now(),
+    duration: Math.max(1200, duration),
+    lastPct: -1,
+  };
+  mode = 'charge';
+  setWalking(false);
+  express('charge', {
+    speech: kind === 'user' ? '姐姐，把手伸过来～喵鳐给你充电！' : `给${name}充电！`,
+    effect: 'sparkle',
+    hold: chargeState.duration + 600,
+    persistent: true,
+  });
+  send('pet:charge', { on: true, progress: 0, title, note });
+  clearInterval(chargeTimer);
+  chargeTimer = setInterval(updateCharge, 80);
+  updateCharge();
+  writePresence();
+  return true;
+}
+
+function updateCharge() {
+  if (!chargeState) return;
+  const pct = clamp(((Date.now() - chargeState.startedAt) / chargeState.duration) * 100, 0, 100);
+  if (pct >= 100) {
+    finishCharge();
+    return;
+  }
+  const whole = Math.floor(pct);
+  if (whole !== chargeState.lastPct) {
+    chargeState.lastPct = whole;
+    send('pet:charge', {
+      on: true,
+      progress: pct,
+      title: chargeState.title,
+      note: chargeState.note,
+    });
+  }
+}
+
+function finishCharge() {
+  if (!chargeState) return;
+  const state = chargeState;
+  chargeState = null;
+  clearInterval(chargeTimer);
+  chargeTimer = null;
+  send('pet:charge', {
+    on: true,
+    progress: 100,
+    title: state.title,
+    note: state.kind === 'user' ? '充满啦！' : `${state.name}充满啦！`,
+    done: true,
+  });
+  clearTimeout(chargeHideTimer);
+  chargeHideTimer = setTimeout(() => {
+    chargeHideTimer = null;
+    if (!chargeState) send('pet:charge', { on: false });
+  }, 1100);
+  if (mode === 'charge') mode = 'idle';
+  if (state.kind === 'pet' && socialAct.action === 'charge') {
+    clearSocialState();
+    writePresence();
+    scheduleBehavior();
+  }
+  express('happy', {
+    speech: state.kind === 'user' ? '姐姐充满电啦～' : `${state.name}，充好啦！`,
+    effect: 'hearts',
+    hold: 2600,
+  });
+  saveConfig();
+  writePresence();
+}
+
+function cancelCharge(quiet = false) {
+  const state = chargeState;
+  if (!state && !chargeTimer && !chargeHideTimer) return;
+  chargeState = null;
+  clearInterval(chargeTimer);
+  chargeTimer = null;
+  clearTimeout(chargeHideTimer);
+  chargeHideTimer = null;
+  if (mode === 'charge') mode = 'idle';
+  send('pet:charge', { on: false });
+  if (state && !quiet) {
+    express('happy', { speech: '充电中断了……', effect: 'sparkle', hold: 2000 });
+  }
+  writePresence();
+}
+
+function startChargeUser() {
+  if (!revealed || drag.active) return;
+  if (mode === 'drag' || mode === 'fall' || mode === 'jump') return;
+  settleForAction();
+  ensureVisible();
+  if (mode === 'sleep') wake();
+  stopWalk();
+  beginCharge('user', '姐姐', 4400);
 }
 
 function toggleSleep() {
@@ -1279,11 +1393,12 @@ const SOCIAL_NAME = '喵鳐';
 const socialLines = {"huadong": ["花东，一起玩吗？", "花东，要不要一起晒太阳？", "花东，你跑得没我快～"], "jiuwang": ["啾汪，一起玩吗？", "啾汪，要不要一起玩？", "啾汪，你也要吃麻婆豆腐吗？"], "qihou": ["启猴，一起玩吗？", "启猴，我分你一口麻婆豆腐。", "启猴，看谁躲得更好！"], "tuxuan": ["兔玹，一起玩吗？", "兔玹，要不要一起散步？", "兔玹，你在忙什么呀？"], "default": ["一起玩吗？", "要不要一起玩？", "你好呀。"]};
 const socialDarkLines = {};
 const SOCIAL_START_DELAY = 1400;
-const SOCIAL_ACTIONS = ['walk', 'jump', 'skate', 'greet', 'name'];
+const SOCIAL_ACTIONS = ['walk', 'jump', 'skate', 'greet', 'name', 'charge'];
 const socialActionLines = {
   walk: ['一起散步吧！', '我们走走看～', '一起走走～'],
   jump: ['一起蹦蹦跳跳！', '跳起来～', '一起蹦一蹦！'],
   skate: ['一起滑滑板吧！', '看我们的滑板！', '一起滑一段～'],
+  charge: ['给你充电！', '分你一点电～', '充电中～'],
 };
 const socialGreetLines = {
   lead: ['{name}，你好呀～', '{name}，看到你啦！', '嗨，{name}～'],
@@ -1423,6 +1538,7 @@ function clearSocialState() {
 }
 
 function cancelSocialAction() {
+  if (chargeState && socialAct.action === 'charge') cancelCharge(true);
   const hadSocial = !!socialAct.action;
   clearTimeout(socialPendingTimer);
   socialPendingTimer = null;
@@ -1443,10 +1559,11 @@ function cancelSocialAction() {
 
 function pickSocialAction() {
   const r = Math.random();
-  if (r < 0.2) return 'walk';
-  if (r < 0.35) return 'jump';
-  if (r < 0.5) return 'skate';
-  if (r < 0.75) return 'greet';
+  if (r < 0.15) return 'charge';
+  if (r < 0.32) return 'walk';
+  if (r < 0.45) return 'jump';
+  if (r < 0.58) return 'skate';
+  if (r < 0.8) return 'greet';
   return 'name';
 }
 
@@ -1535,12 +1652,16 @@ function monitorSocialPartner(now) {
     abort();
     return;
   }
-  if ((socialAct.started || now >= socialAct.start - 300) && data.socialAction !== socialAct.action) {
+  if (
+    socialAct.action !== 'charge' &&
+    (socialAct.started || now >= socialAct.start - 300) &&
+    data.socialAction !== socialAct.action
+  ) {
     abort();
   }
 }
 
-function socialInteract(other, now) {
+function socialInteract(other, now, forced = null) {
   const me = win.getBounds();
   const dir = other.x + WIN_W / 2 > me.x + WIN_W / 2 ? 1 : -1;
   setFacing(dir);
@@ -1564,7 +1685,7 @@ function socialInteract(other, now) {
     return;
   }
 
-  const action = pickSocialAction();
+  const action = forced || pickSocialAction();
   const movement = action === 'walk' || action === 'jump' || action === 'skate';
   const separating = separateFrom(other);
   const wa = workAreaForWindow();
@@ -1579,7 +1700,9 @@ function socialInteract(other, now) {
           ? 3000 + Math.random() * 1200
           : action === 'name'
             ? 3200
-            : 2600;
+            : action === 'charge'
+              ? 3800
+              : 2600;
   const start = now + SOCIAL_START_DELAY + (separating ? 400 : 0);
   const until = start + duration + (movement ? 1600 : 1400);
 
@@ -1756,6 +1879,29 @@ function runSocialAction(session) {
     return;
   }
 
+  if (session.action === 'charge') {
+    if (session.lead === SOCIAL_ID) {
+      beginCharge('pet', session.partnerName || '你', 3800);
+    } else {
+      express('happy', {
+        speech: '充电中～好舒服',
+        effect: 'sparkle',
+        hold: Math.max(1800, Math.min(3200, session.duration)),
+      });
+      clearTimeout(socialEndTimer);
+      socialEndTimer = setTimeout(() => {
+        socialEndTimer = null;
+        if (socialAct.action === 'charge' && socialAct.start === session.start) {
+          express('happy', { speech: '充满啦～', effect: 'hearts', hold: 2400 });
+          clearSocialState();
+          writePresence();
+          scheduleBehavior();
+        }
+      }, Math.max(0, session.until - Date.now()) + 60);
+    }
+    return;
+  }
+
   if (session.action !== 'greet' && session.action !== 'name') {
     clearSocialState();
     return;
@@ -1857,7 +2003,7 @@ function checkSocial(now) {
         !isDarkNow() &&
         data.mode === 'idle' &&
         isJoinableSession(data, now) &&
-        data.id < SOCIAL_ID
+        (data.id < SOCIAL_ID || data.socialAction === 'charge')
       ) {
         joinSocialAction(data, now);
         return;
@@ -1865,7 +2011,13 @@ function checkSocial(now) {
       if (socialAct.action && now < socialAct.until) continue;
       if (now < socialCooldownUntil) continue;
       if (data.mode !== 'idle') continue;
-      if (!(SOCIAL_ID < data.id)) continue;
+      if (!(SOCIAL_ID < data.id)) {
+        if (Math.random() < 0.15) {
+          socialInteract(data, now, 'charge');
+          return;
+        }
+        continue;
+      }
       socialInteract(data, now);
       return;
     }
@@ -2077,6 +2229,7 @@ function buildTrayMenu() {
     { type: 'separator' },
     { label: '摸摸头', click: () => { ensureVisible(); petClick(true); } },
     { label: '喂麻婆豆腐', click: feed },
+    { label: '给姐姐充电', click: startChargeUser },
     { label: mode === 'sleep' ? '叫醒它' : '睡一觉', click: toggleSleep },
     { label: '去散步', click: () => { ensureVisible(); startWalk(); } },
     { label: '跑一跑', click: () => { ensureVisible(); startRun(); } },
@@ -2120,6 +2273,9 @@ function handleAction(action) {
       break;
     case 'feed':
       feed();
+      break;
+    case 'charge-user':
+      startChargeUser();
       break;
     case 'game':
       playGame();

@@ -1,4 +1,4 @@
-const FILES = ['idle', 'dizzy', 'sleepy', 'goodnight', 'skate'];
+const FILES = ['idle', 'dizzy', 'sleepy', 'goodnight', 'charge', 'skate'];
 
 const ALIAS = {
   idle: 'idle',
@@ -19,6 +19,7 @@ const ALIAS = {
   sleepy: 'sleepy',
   goodnight: 'goodnight',
   skate: 'skate',
+  charge: 'charge',
 };
 
 const NAMES = Object.keys(ALIAS);
@@ -39,6 +40,10 @@ const taskTitleEl = document.getElementById('task-title');
 const taskDetailEl = document.getElementById('task-detail');
 const taskFillEl = document.getElementById('task-fill');
 const taskBarEl = taskEl ? taskEl.querySelector('.task-bar') : null;
+const chargeEl = document.getElementById('charge');
+const chargeFillEl = document.getElementById('charge-fill');
+const chargeTitleEl = document.getElementById('charge-title');
+const chargeNoteEl = document.getElementById('charge-note');
 
 const sprites = {};
 
@@ -75,6 +80,7 @@ const defaultEffects = {
   angry: 'anger',
   hot: 'sweat',
   skate: 'sparkle',
+  charge: 'sparkle',
 };
 
 function clamp(v, lo, hi) {
@@ -302,6 +308,23 @@ function setEffect(type, persistent) {
   }, 1800);
 }
 
+function setChargeView(data) {
+  if (!chargeEl) return;
+  if (!data || data.on === false) {
+    chargeEl.hidden = true;
+    chargeEl.classList.remove('done');
+    pet.classList.remove('charging');
+    return;
+  }
+  chargeEl.hidden = false;
+  const pct = clamp(Number(data.progress) || 0, 0, 100);
+  if (chargeFillEl) chargeFillEl.style.width = `${pct}%`;
+  if (chargeTitleEl && data.title) chargeTitleEl.textContent = data.title;
+  if (chargeNoteEl && data.note) chargeNoteEl.textContent = data.note;
+  chargeEl.classList.toggle('done', pct >= 100);
+  pet.classList.toggle('charging', pct < 100);
+}
+
 function spawnDust(impact) {
   if (impact < 480) return;
   for (let i = 0; i < 3; i += 1) {
@@ -508,6 +531,12 @@ function setupEvents() {
     if (!data || !data.type) return;
     setEffect(data.type, !!data.persistent);
   });
+
+  if (window.pet.onCharge) {
+    window.pet.onCharge((data) => {
+      setChargeView(data);
+    });
+  }
 
   window.pet.onKickflip((data) => {
     startKickflip(data && data.duration);
