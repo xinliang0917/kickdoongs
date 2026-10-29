@@ -28,9 +28,31 @@ function readRootPackage() {
 function ensureElectron(file) {
   const binary = path.join(ELECTRON_DIST, file);
   const crossArch = ARCH !== process.arch;
-  if (fs.existsSync(binary) && !crossArch) return;
+  const required =
+    process.platform === 'win32'
+      ? [
+          'electron.exe',
+          'icudtl.dat',
+          'resources.pak',
+          'snapshot_blob.bin',
+          'v8_context_snapshot.bin',
+          'ffmpeg.dll',
+          'locales',
+        ]
+      : [file];
+  const runtimeReady = () => {
+    if (!required.every((name) => fs.existsSync(path.join(ELECTRON_DIST, name)))) return false;
+    if (process.platform !== 'win32') return true;
+    try {
+      return fs.statSync(path.join(ELECTRON_DIST, 'icudtl.dat')).size > 1000000;
+    } catch {
+      return false;
+    }
+  };
 
-  if (crossArch) {
+  if (fs.existsSync(binary) && !crossArch && runtimeReady()) return;
+
+  if (!crossArch) {
     fs.rmSync(ELECTRON_DIST, { recursive: true, force: true });
   }
 
@@ -44,22 +66,14 @@ function ensureElectron(file) {
     throw new Error('Electron runtime still missing after install. Run npm install first.');
   }
 
-  if (process.platform !== 'win32') return;
-
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    try {
-      const size = fs.statSync(binary).size;
-      if (size > 1000000) {
-        sleepSync(200);
-        if (fs.existsSync(binary) && fs.statSync(binary).size === size) return;
-      }
-    } catch {
-      /* keep waiting for the extraction to settle */
-    }
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (runtimeReady()) return;
     sleepSync(250);
   }
 
-  throw new Error(`Electron runtime did not stabilize: ${binary}`);
+  throw new Error(
+    `Electron runtime is incomplete (missing ICU or support files): ${ELECTRON_DIST}`
+  );
 }
 
 function copyAppFiles(appDir, rootPkg) {
