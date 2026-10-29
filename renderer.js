@@ -81,7 +81,7 @@ function clamp(v, lo, hi) {
 }
 
 function applyDir() {
-  const flip = currentName === 'skate' ? -dir : dir;
+  const flip = dir;
   flipper.style.setProperty('--dir', String(flip));
 }
 
