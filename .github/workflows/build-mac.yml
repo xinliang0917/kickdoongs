@@ -1,4 +1,4 @@
-name: Build packages
+﻿name: Build packages
 
 on:
   workflow_dispatch:
@@ -119,7 +119,6 @@ jobs:
         with:
           name: ${{ env.PET_SLUG }}-windows-x64
           path: |
-            dist/*.zip
             dist/*-setup.exe
           if-no-files-found: error
 
