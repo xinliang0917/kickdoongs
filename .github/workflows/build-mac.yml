@@ -114,6 +114,29 @@ jobs:
       - name: Package app
         run: npm run package
 
+      - name: Verify Windows package
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist -Filter '*.zip' | Select-Object -First 1
+          if (-not $zip) { throw 'Windows zip was not created' }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName)
+          $names = @($archive.Entries | ForEach-Object { $_.FullName })
+          $archive.Dispose()
+          $required = @(
+            'icudtl.dat',
+            'resources.pak',
+            'locales/',
+            'resources/app/assets/pet/idle.png',
+            'resources/app/main.js'
+          )
+          foreach ($needle in $required) {
+            if (-not ($names | Where-Object { $_ -like "*$needle*" })) {
+              throw "Windows package is missing $needle"
+            }
+          }
+          Write-Host "Windows package verified: $($zip.Name), $($names.Count) entries"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
