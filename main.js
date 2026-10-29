@@ -1295,12 +1295,7 @@ function cancelSocialAction() {
 }
 
 function pickSocialAction() {
-  const r = Math.random();
-  if (r < 0.2) return 'walk';
-  if (r < 0.35) return 'jump';
-  if (r < 0.5) return 'skate';
-  if (r < 0.75) return 'greet';
-  return 'name';
+  return Math.random() < 0.5 ? 'greet' : 'name';
 }
 
 function roomDir(wa, x) {
@@ -1340,7 +1335,7 @@ function separateFrom(other) {
 }
 
 function isJoinableSession(data, now) {
-  if (!data || !SOCIAL_ACTIONS.includes(data.socialAction)) return false;
+  if (!data || !['greet', 'name'].includes(data.socialAction)) return false;
   if (data.socialLead !== data.id || data.socialTarget !== SOCIAL_ID) return false;
   if (!Number.isFinite(data.socialStart) || !Number.isFinite(data.socialUntil)) return false;
   if (now >= Number(data.socialUntil)) return false;
@@ -1528,6 +1523,11 @@ function runSocialAction(session) {
   clearTimeout(exprTimer);
   exprTimer = null;
   socialAct.started = true;
+
+  if (!['greet', 'name'].includes(session.action)) {
+    clearSocialState();
+    return;
+  }
 
   if (session.action === 'walk') {
     const wa = workAreaForWindow();
