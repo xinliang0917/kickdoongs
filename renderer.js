@@ -6,7 +6,7 @@
 ];
 
 const BASE_HEIGHT = 0.315;
-const SPRITE_SCALE = { skate: 1.35, skate_dark: 1.35 };
+const SPRITE_SCALE = { skate: 1.2, skate_dark: 1.2 };
 const sprite = document.getElementById('sprite');
 const flipper = document.getElementById('flipper');
 const pet = document.getElementById('pet');

@@ -7,7 +7,7 @@ const WIN_H = 460;
 const GRAVITY = 2200;
 const BASE_HEIGHT = 0.35;
 const PEEK_IDLE_SECONDS = 90;
-const SPRITE_SCALE = { skate: 1.35, skate_dark: 1.35 };
+const SPRITE_SCALE = { skate: 1.2, skate_dark: 1.2 };
 const PET_MANIFEST = JSON.parse(
   fs.readFileSync(path.join(__dirname, 'assets', 'pet', 'manifest.json'), 'utf8')
 );
@@ -558,7 +558,7 @@ function enterPeek() {
   setWalking(false);
   send('pet:peek', { on: true, side });
   express('bored', { speech: null, effect: 'zzz', hold: 6000, persistent: true });
-  startGlide(x, y, 900, null);
+  win.setPosition(x, y, false);
   writePresence();
 }
 
@@ -576,13 +576,9 @@ function exitPeek(immediate = false) {
     )
   );
   const y = Math.round(groundFor(wa));
-  if (immediate) {
-    glide = null;
-    win.setPosition(x, y, false);
-    saveConfig();
-  } else {
-    startGlide(x, y, 680, () => saveConfig());
-  }
+  glide = null;
+  win.setPosition(x, y, false);
+  saveConfig();
   express('sleepy', { speech: '唔……姐姐回来了。', hold: 2600 });
 }
 
