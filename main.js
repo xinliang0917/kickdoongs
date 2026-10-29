@@ -110,7 +110,7 @@ const petLines = {
 
 const feedLines = [
   '🎵I hate it ～but I love it～🎵',
-  '🎶I used to hate blueberrys~🎶',
+  '🎶I used to hate blueberries~🎶',
 ];
 const veggieLines = [
   '小虫！嘤嘤，谢谢姐姐！',
@@ -1744,7 +1744,6 @@ function finishSocialHop() {
 function checkSocial(now) {
   if (!revealed || !win || win.isDestroyed() || !win.isVisible()) return;
   if (drag.active || mode !== 'idle' || taskActive) return;
-  if (refreshAnyTaskRunning(now)) return;
   let files;
   try {
     files = fs.readdirSync(getSocialDir());
@@ -1775,7 +1774,7 @@ function checkSocial(now) {
     if (otherDisplay.id !== myDisplay.id) continue;
     const dx = Math.abs(data.x + WIN_W / 2 - (me.x + WIN_W / 2));
     const dy = Math.abs(data.y + WIN_H - (me.y + WIN_H));
-    if (dx < 200 && dy < 60) {
+    if (dx < 420 && dy < 60) {
       if (data.dark && !isDarkNow()) {
         if (socialAct.action && now < socialAct.until) continue;
         if (now < socialCooldownUntil) continue;
