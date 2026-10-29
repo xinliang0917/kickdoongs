@@ -1587,7 +1587,7 @@ function runSocialAction(session) {
   exprTimer = null;
   socialAct.started = true;
 
-  if (!['greet', 'name'].includes(session.action)) {
+  if (!['greet', 'name', 'charge'].includes(session.action)) {
     clearSocialState();
     return;
   }
