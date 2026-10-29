@@ -458,7 +458,7 @@ function enterPeek() {
   setWalking(false);
   send('pet:peek', { on: true, side });
   express('bored', { speech: null, effect: 'zzz', hold: 6000, persistent: true });
-  startGlide(x, y, 900, null);
+  win.setPosition(x, y, false);
   writePresence();
 }
 
@@ -476,13 +476,9 @@ function exitPeek(immediate = false) {
     )
   );
   const y = Math.round(groundFor(wa));
-  if (immediate) {
-    glide = null;
-    win.setPosition(x, y, false);
-    saveConfig();
-  } else {
-    startGlide(x, y, 680, () => saveConfig());
-  }
+  glide = null;
+  win.setPosition(x, y, false);
+  saveConfig();
   express('sleepy', { speech: '唔……姐姐回来了。', hold: 2600 });
 }
 
