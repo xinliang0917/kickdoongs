@@ -738,7 +738,7 @@ body.peek-right .fx.z.z3 {
   padding: 6px;
   border: 2px solid #16171a;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.985);
+  background: rgba(255, 183, 94, 0.985);
   box-shadow: 0 14px 32px rgba(12, 24, 44, 0.24);
   font-size: 13px;
   color: #1b1c20;
@@ -767,7 +767,7 @@ body.peek-right .fx.z.z3 {
 }
 
 .menu .item:hover {
-  background: #eaf4ff;
+  background: #ffd9a3;
 }
 
 .menu .item.danger {
@@ -781,7 +781,7 @@ body.peek-right .fx.z.z3 {
 .menu .sep {
   height: 1px;
   margin: 5px 8px;
-  background: #ececef;
+  background: rgba(121, 72, 14, 0.22);
 }
 
 .menu .group {
