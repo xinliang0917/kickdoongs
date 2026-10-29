@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('pet', {
   onSettings: (cb) => ipcRenderer.on('pet:settings', (_e, data) => cb(data)),
   onTask: (cb) => ipcRenderer.on('pet:task', (_e, data) => cb(data)),
   onLand: (cb) => ipcRenderer.on('pet:land', (_e, data) => cb(data)),
+  onPeek: (cb) => ipcRenderer.on('pet:peek', (_e, data) => cb(data)),
   onResetInput: (cb) => ipcRenderer.on('pet:reset-input', () => cb()),
   onCloseMenu: (cb) => ipcRenderer.on('pet:close-menu', () => cb()),
 });

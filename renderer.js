@@ -1,5 +1,5 @@
 ﻿const NAMES = [
-  'idle', 'stretch', 'stretch-legs', 'sleepy', 'happy', 'hot',
+  'idle', 'stretch', 'stretch-legs', 'wrap', 'sleepy', 'happy', 'hot',
   'giggle', 'sauce', 'bored', 'confused',
   'love', 'shy', 'wave', 'goodnight',
   'angry', 'back', 'surprised', 'cuddle', 'skate',
@@ -51,6 +51,7 @@ const defaultEffects = {
   wave: 'sparkle',
   sauce: 'sparkle',
   stretch: 'sparkle',
+  wrap: 'hearts',
   goodnight: 'zzz',
   sleepy: 'zzz',
   confused: 'question',
@@ -469,6 +470,14 @@ function setupEvents() {
     onTop = !!data.onTop;
     applyScale();
     updateMenuState();
+  });
+
+  window.pet.onPeek((data) => {
+    const on = !!(data && data.on);
+    const side = Number(data && data.side) < 0 ? 'left' : 'right';
+    document.body.classList.toggle('peek', on);
+    document.body.classList.toggle('peek-left', on && side === 'left');
+    document.body.classList.toggle('peek-right', on && side === 'right');
   });
 
   window.pet.onTask((data) => {

@@ -253,7 +253,30 @@ body {
   animation: squish 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
-.pet.angry {
+body.peek-right .pet {
+  animation: peekSwayRight 4.8s ease-in-out infinite;
+}
+
+body.peek-left .pet {
+  animation: peekSwayLeft 4.8s ease-in-out infinite;
+}
+
+body.peek-right .fx.z.z1 {
+  right: auto;
+  left: 4%;
+}
+
+body.peek-right .fx.z.z2 {
+  right: auto;
+  left: -2%;
+}
+
+body.peek-right .fx.z.z3 {
+  right: auto;
+  left: 9%;
+}
+
+.pet.angry {.pet.angry {
   animation: shake 0.42s linear 3;
 }
 
@@ -315,7 +338,7 @@ body {
   opacity: 0;
   pointer-events: none;
   transform: translateX(-50%);
-  transform-origin: 50% 86%;
+  transform-origin: 50% 90%;
   -webkit-user-drag: none;
   will-change: transform;
 }
@@ -513,7 +536,27 @@ body {
   }
 }
 
-@keyframes waddle {
+@keyframes peekSwayRight {
+  0%,
+  100% {
+    transform: translateY(0) rotate(1.6deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(-0.8deg);
+  }
+}
+
+@keyframes peekSwayLeft {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.6deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(0.8deg);
+  }
+}
+
+@keyframes waddle {@keyframes waddle {
   0%,
   100% {
     transform: translateY(0) rotate(-1.6deg);
