@@ -1,0 +1,189 @@
+name: Build packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - wumin
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
+env:
+  PET_SLUG: wumin
+  PET_NAME: 呜旻
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - arm64
+          - x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package app
+        env:
+          PET_ARCH: ${{ matrix.arch }}
+        run: npm run package
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PET_SLUG }}-macos-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Exclude workspace from Defender
+        shell: pwsh
+        run: |
+          if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+            Get-MpComputerStatus | Select-Object AMServiceEnabled, RealTimeProtectionEnabled, AntivirusEnabled
+            try {
+              Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+              Add-MpPreference -ExclusionPath "$env:RUNNER_TEMP"
+              Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\electron\Cache"
+              Write-Host "Defender exclusions added"
+            } catch {
+              Write-Warning "Could not add Defender exclusions: $_"
+            }
+          } else {
+            Write-Host "Add-MpPreference is not available"
+          }
+
+      - name: Ensure NSIS
+        shell: pwsh
+        run: |
+          $makensis = @(
+            "$env:ProgramFiles\NSIS\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "$env:ChocolateyInstall\bin\makensis.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $makensis) {
+            choco install nsis -y --no-progress
+            $makensis = @(
+              "$env:ProgramFiles\NSIS\makensis.exe",
+              "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+              "$env:ChocolateyInstall\bin\makensis.exe"
+            ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          }
+          if (-not $makensis) { throw 'NSIS (makensis) not found' }
+          "MAKENSIS=$makensis" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Using $makensis"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package app
+        run: npm run package
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PET_SLUG }}-windows-x64
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "name=${PET_NAME} ${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${PET_SLUG}-latest" >> "$GITHUB_OUTPUT"
+            echo "name=${PET_NAME} 最新构建" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "notes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Clean previous packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release view "$TAG" --json assets --jq '.assets[].name' | while IFS= read -r name; do
+              case "$name" in
+                *.zip|*.dmg|*-setup.exe) gh release delete-asset "$TAG" "$name" -y || true ;;
+              esac
+            done
+          fi
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          generate_release_notes: ${{ steps.meta.outputs.notes == 'true' }}
+          files: artifacts/*
+
+      - name: Keep only the newest release for this pet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          SLUG: ${{ env.PET_SLUG }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate \
+            --jq ".[] | select(.tag_name != \"$TAG\") | select([.assets[].name] | any(.[]; startswith(\"$SLUG-\"))) | .tag_name" |
+          while IFS= read -r old; do
+            [ -z "$old" ] && continue
+            echo "Deleting old release: $old"
+            gh release delete "$old" --cleanup-tag -y || true
+          done
