@@ -6,6 +6,7 @@
 ];
 
 const BASE_HEIGHT = 0.315;
+const SPRITE_SCALE = { skate: 1.35, skate_dark: 1.35 };
 const sprite = document.getElementById('sprite');
 const flipper = document.getElementById('flipper');
 const pet = document.getElementById('pet');
@@ -73,7 +74,8 @@ function setDir(value) {
 function applyScale() {
   const image = sprites[currentName];
   if (!image) return;
-  const height = Math.max(48, Math.round(image.naturalHeight * BASE_HEIGHT * userScale));
+  const factor = SPRITE_SCALE[currentName] || 1;
+  const height = Math.max(48, Math.round(image.naturalHeight * BASE_HEIGHT * userScale * factor));
   sprite.style.height = `${height}px`;
 }
 
@@ -481,6 +483,14 @@ function setupEvents() {
     onTop = !!data.onTop;
     applyScale();
     updateMenuState();
+  });
+
+  window.pet.onPeek((data) => {
+    const on = !!(data && data.on);
+    const side = Number(data && data.side) < 0 ? 'left' : 'right';
+    document.body.classList.toggle('peek', on);
+    document.body.classList.toggle('peek-left', on && side === 'left');
+    document.body.classList.toggle('peek-right', on && side === 'right');
   });
 
   window.pet.onTask((data) => {

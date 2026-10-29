@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage } = require('electron');
+﻿const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -6,6 +6,8 @@ const WIN_W = 360;
 const WIN_H = 460;
 const GRAVITY = 2200;
 const BASE_HEIGHT = 0.35;
+const PEEK_IDLE_SECONDS = 90;
+const SPRITE_SCALE = { skate: 1.35, skate_dark: 1.35 };
 const PET_MANIFEST = JSON.parse(
   fs.readFileSync(path.join(__dirname, 'assets', 'pet', 'manifest.json'), 'utf8')
 );
@@ -61,6 +63,9 @@ let skate = {
 };
 let drag = { active: false, offsetX: 0, offsetY: 0, samples: [] };
 const alphaCache = new Map();
+let peek = { side: 0, restoreX: null, wa: null, enteredAt: 0 };
+let lastPeekCheck = 0;
+let glide = null;
 
 const idleLines = [
   '嘤嘤，姐姐在忙什么呀？',
@@ -169,7 +174,7 @@ function loadConfig() {
 
 function saveConfig() {
   try {
-    if (win && !win.isDestroyed()) {
+    if (win && !win.isDestroyed() && mode !== 'peek' && !glide) {
       const b = win.getBounds();
       if (Number.isFinite(b.x)) cfg.x = b.x;
     }
@@ -357,6 +362,35 @@ function taskFilePath() {
   return path.join(app.getPath('userData'), 'opencode-status.json');
 }
 
+let anyTaskCheckedAt = 0;
+let anyTaskRunning = false;
+
+function refreshAnyTaskRunning(now) {
+  if (now - anyTaskCheckedAt < 1000) return anyTaskRunning;
+  anyTaskCheckedAt = now;
+  anyTaskRunning = false;
+  const appData = process.env.APPDATA || path.join(app.getPath('home'), 'AppData', 'Roaming');
+  const files = [taskFilePath()];
+  for (const name of ['呜旻', '呜旻桌宠', '兔玹', '喵鳐', '花东', '啾汪', '启猴', '蓝团子', '桌宠']) {
+    files.push(path.join(appData, name, 'opencode-status.json'));
+  }
+  for (const file of files) {
+    try {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (!data || typeof data !== 'object') continue;
+      const active = data.state === 'thinking' || data.state === 'working' || data.state === 'waiting';
+      if (!active) continue;
+      const stamp = Number(data.updatedAt) || 0;
+      if (now - stamp > 10 * 60 * 1000) continue;
+      anyTaskRunning = true;
+      break;
+    } catch {
+      /* try next pet */
+    }
+  }
+  return anyTaskRunning;
+}
+
 function clearTask() {
   clearTimeout(taskHideTimer);
   taskHideTimer = null;
@@ -474,9 +508,119 @@ function pollTask() {
   applyTask(data);
 }
 
+function startGlide(toX, toY, duration, done = null) {
+  if (!win || win.isDestroyed()) return;
+  const b = win.getBounds();
+  glide = {
+    x0: b.x,
+    y0: b.y,
+    x1: Math.round(toX),
+    y1: Math.round(toY),
+    t0: Date.now(),
+    duration: Math.max(120, duration),
+    done,
+  };
+}
+
+function finishGlide() {
+  if (!glide) return;
+  const g = glide;
+  glide = null;
+  if (win && !win.isDestroyed()) {
+    win.setPosition(Math.round(g.x1), Math.round(g.y1), false);
+  }
+  if (g.done) g.done();
+}
+
+function enterPeek() {
+  if (!revealed || !win || win.isDestroyed() || !win.isVisible()) return;
+  if (mode !== 'idle' || drag.active || taskActive || taskInfo || glide) return;
+  if (typeof darkMode !== 'undefined' && darkMode) return;
+  if (currentSprite === 'skate' || currentSprite === 'skate_dark') return;
+
+  const wa = workAreaForWindow();
+  const b = win.getBounds();
+  const meta = PET_MANIFEST.bored || PET_MANIFEST.idle || { w: 453, h: 514 };
+  const w = meta.w * BASE_HEIGHT * cfg.scale;
+  const h = meta.h * BASE_HEIGHT * cfg.scale;
+  const side = b.x + WIN_W / 2 <= wa.x + wa.width / 2 ? -1 : 1;
+  const hidden = WIN_W / 2 + w * 0.04;
+  const x = side > 0 ? wa.x + wa.width - WIN_W + hidden : wa.x - hidden;
+  const y = clamp(
+    wa.y + wa.height * 0.46 - (WIN_H - h / 2),
+    wa.y + 8,
+    wa.y + wa.height - WIN_H - 8
+  );
+
+  peek = { side, restoreX: b.x, wa, enteredAt: Date.now() };
+  mode = 'peek';
+  setFacing(side > 0 ? -1 : 1);
+  setWalking(false);
+  send('pet:peek', { on: true, side });
+  express('bored', { speech: null, effect: 'zzz', hold: 6000, persistent: true });
+  startGlide(x, y, 900, null);
+  writePresence();
+}
+
+function exitPeek(immediate = false) {
+  if (mode !== 'peek') return;
+  const wa = peek.wa || workAreaForWindow();
+  const b = win.getBounds();
+  mode = 'idle';
+  send('pet:peek', { on: false, side: 0 });
+  const x = Math.round(
+    clamp(
+      Number.isFinite(peek.restoreX) ? peek.restoreX : b.x,
+      wa.x,
+      wa.x + wa.width - WIN_W
+    )
+  );
+  const y = Math.round(groundFor(wa));
+  if (immediate) {
+    glide = null;
+    win.setPosition(x, y, false);
+    saveConfig();
+  } else {
+    startGlide(x, y, 680, () => saveConfig());
+  }
+  express('sleepy', { speech: '唔……姐姐回来了。', hold: 2600 });
+}
+
+function checkPeekIdle() {
+  if (!win || win.isDestroyed() || !win.isVisible() || drag.active || glide) return;
+  let idle = 0;
+  try {
+    idle = powerMonitor.getSystemIdleTime();
+  } catch {
+    return;
+  }
+
+  if (mode === 'peek') {
+    if (idle >= 3) return;
+    const point = screen.getCursorScreenPoint();
+    const b = win.getBounds();
+    const near =
+      point.x >= b.x - 70 &&
+      point.x <= b.x + WIN_W + 70 &&
+      point.y >= b.y - 70 &&
+      point.y <= b.y + WIN_H + 70;
+    if (!near) exitPeek();
+    return;
+  }
+
+  if (mode !== 'idle' || taskInfo || menuOpen) return;
+  if (typeof darkMode !== 'undefined' && darkMode) return;
+  if (socialAct.action || socialPendingTimer) return;
+  if (!['idle', 'stand'].includes(currentSprite) || bubbleBox) return;
+  if (idle < PEEK_IDLE_SECONDS) return;
+  enterPeek();
+}
+
 function stopWalk() {
   stopSkate();
   cancelSocialAction();
+  if (mode === 'peek') exitPeek(true);
+  finishGlide();
   if (mode === 'walk' || mode === 'run') {
     mode = 'idle';
     setWalking(false);
@@ -846,6 +990,23 @@ function tick() {
   updatePointer();
   if (drag.active || mode === 'drag') return;
 
+  if (now - lastPeekCheck > 900) {
+    lastPeekCheck = now;
+    checkPeekIdle();
+  }
+
+  if (glide) {
+    const t = clamp((now - glide.t0) / glide.duration, 0, 1);
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    win.setPosition(
+      Math.round(glide.x0 + (glide.x1 - glide.x0) * eased),
+      Math.round(glide.y0 + (glide.y1 - glide.y0) * eased),
+      false
+    );
+    if (t >= 1) finishGlide();
+    return;
+  }
+
   if (now - socialLastWrite > 1000) {
     socialLastWrite = now;
     writePresence();
@@ -974,6 +1135,10 @@ function tick() {
 }
 
 function idleBehavior() {
+  if (glide || mode === 'peek') {
+    scheduleBehavior();
+    return;
+  }
   if (Date.now() < socialQuietUntil) {
     scheduleBehavior();
     return;
@@ -1012,7 +1177,7 @@ function idleBehavior() {
     } else if (r < d + 0.44) {
       express('confused', { speech: '嗯？姐姐你在忙吗？', effect: 'question', hold: 2600 });
     } else if (r < d + 0.5) {
-      express('hot', { speech: '好热……姐姐，我想吃蓝莓。', effect: 'sweat', hold: 2600 });
+      express('hot', { speech: '好饿……姐姐，我想吃蓝莓。', effect: 'sweat', hold: 2600 });
     } else if (r < d + 0.56) {
       express('cuddle', { speech: '姐姐陪我待一会儿吧。', effect: 'hearts', hold: 3000 });
     } else if (r < d + 0.62) {
@@ -1026,17 +1191,29 @@ function idleBehavior() {
 
 const SOCIAL_ID = 'huadong';
 const SOCIAL_NAME = '花东';
-const socialLines = {"tuxuan": ["兔玹，要一起散步吗？", "兔玹，你在忙什么？", "兔玹，一起玩吧。"], "jiuwang": ["啾汪，别闹。", "啾汪，一起玩吧。", "啾汪，你好呀。"], "default": ["一起玩吗？", "你好呀。"]};
 const socialDarkLines = {"tuxuan": ["兔玹，别靠过来。", "姐姐是我的。", "姐姐只能看着我一个人…", "哼，你也在啊。"], "jiuwang": ["啾汪，离我远点。", "别抢姐姐。", "姐姐只能看着我一个人…", "哼。"], "default": ["别靠过来。", "姐姐只能看着我一个人…", "哼。"]};
 const SOCIAL_START_DELAY = 1400;
-const SOCIAL_ACTIONS = ['walk', 'jump', 'skate'];
+const SOCIAL_ACTIONS = ['walk', 'jump', 'skate', 'greet', 'name'];
 const socialActionLines = {
   walk: ['一起散步吧！', '我们走走看～', '一起走走～'],
   jump: ['一起蹦蹦跳跳！', '跳起来～', '一起蹦一蹦！'],
   skate: ['一起滑滑板吧！', '看我们的滑板！', '一起滑一段～'],
 };
+const socialGreetLines = {
+  lead: ['{name}，你好呀～', '{name}，看到你啦！', '嗨，{name}～'],
+  join: ['{name}，你也好呀～', '{name}，我在这儿～', '嗯，{name}～'],
+};
+const socialNameLines = {
+  lead: ['{name}！{name}！', '{name}，叫你呢～', '喂——{name}～'],
+  join: ['{name}！', '听到啦，{name}～', '{name}，我在这儿～'],
+};
 const socialJoinLines = ['好呀！', '来啦～', '等我一下！'];
 const socialEndLines = ['一起玩真开心！', '下次再一起玩～', '嘿嘿，好开心。'];
+
+function socialLineFor(action, otherName, isLead) {
+  const set = action === 'name' ? socialNameLines : socialGreetLines;
+  return pick(isLead ? set.lead : set.join).replace(/\{name\}/g, otherName);
+}
 
 function scaredSocialLine(other) {
   const name = (other && other.name) || '它';
@@ -1095,8 +1272,10 @@ let socialCooldownUntil = 0;
 let socialQuietUntil = 0;
 let socialLastAt = 0;
 let socialLastTarget = '';
-let socialAct = { action: '', start: 0, duration: 0, until: 0, dir: 1, lead: '', partner: '' };
+let socialAct = { action: '', start: 0, duration: 0, until: 0, dir: 1, lead: '', partner: '', partnerName: '', started: false };
 let socialPendingTimer = null;
+let socialSpeakTimer = null;
+let socialEndTimer = null;
 let socialJoinedKey = '';
 let socialHop = { vy: 0, ground: 0, until: 0, left: 0 };
 
@@ -1147,7 +1326,11 @@ function socialClearDark() {
 }
 
 function clearSocialState() {
-  socialAct = { action: '', start: 0, duration: 0, until: 0, dir: 1, lead: '', partner: '' };
+  clearTimeout(socialSpeakTimer);
+  clearTimeout(socialEndTimer);
+  socialSpeakTimer = null;
+  socialEndTimer = null;
+  socialAct = { action: '', start: 0, duration: 0, until: 0, dir: 1, lead: '', partner: '', partnerName: '', started: false };
 }
 
 function cancelSocialAction() {
@@ -1171,9 +1354,11 @@ function cancelSocialAction() {
 
 function pickSocialAction() {
   const r = Math.random();
-  if (r < 0.4) return 'walk';
-  if (r < 0.7) return 'jump';
-  return 'skate';
+  if (r < 0.2) return 'walk';
+  if (r < 0.35) return 'jump';
+  if (r < 0.5) return 'skate';
+  if (r < 0.75) return 'greet';
+  return 'name';
 }
 
 function roomDir(wa, x) {
@@ -1182,6 +1367,30 @@ function roomDir(wa, x) {
   if (right < 140 && left > right) return -1;
   if (left < 140 && right > left) return 1;
   return Math.random() < 0.5 ? 1 : -1;
+}
+
+const SOCIAL_GAP = 22;
+
+function separateFrom(other) {
+  if (!win || win.isDestroyed() || drag.active || glide) return false;
+  if (mode !== 'idle') return false;
+  const meta = PET_MANIFEST.idle || { w: 453, h: 514 };
+  const spriteW = meta.w * 0.315 * cfg.scale;
+  const spriteH = meta.h * 0.315 * cfg.scale;
+  const b = win.getBounds();
+  const myCenter = b.x + WIN_W / 2;
+  const otherCenter = Number(other.x) + WIN_W / 2;
+  const dx = Math.abs(myCenter - otherCenter);
+  const dy = Math.abs(b.y - Number(other.y));
+  if (dx >= spriteW || dy >= spriteH) return false;
+  const needed = (spriteW + SOCIAL_GAP - dx) / 2;
+  if (needed < 2) return false;
+  const dir = dx < 1 ? (SOCIAL_ID < (other.id || '') ? -1 : 1) : myCenter > otherCenter ? 1 : -1;
+  const wa = workAreaForWindow();
+  const target = clamp(Math.round(b.x + dir * needed), wa.x, wa.x + wa.width - WIN_W);
+  if (Math.abs(target - b.x) < 2) return false;
+  startGlide(target, groundFor(wa), clamp(needed * 5, 220, 520), null);
+  return true;
 }
 
 function isJoinableSession(data, now) {
@@ -1195,13 +1404,13 @@ function isJoinableSession(data, now) {
 
 function monitorSocialPartner(now) {
   if (!socialAct.action || !socialAct.partner) return;
-  if (now < socialAct.start - 1000) return;
-  const started = mode === 'walk' || mode === 'run' || mode === 'hop' || mode === 'skate';
+  if (now >= socialAct.until) return;
+  const moving = mode === 'walk' || mode === 'run' || mode === 'hop' || mode === 'skate';
   const abort = () => {
-    if (started) stopWalk();
+    if (moving) stopWalk();
     else cancelSocialAction();
   };
-  if (!started && now >= socialAct.start + 1200) {
+  if (!socialAct.started && now >= socialAct.start + 1200) {
     abort();
     return;
   }
@@ -1233,7 +1442,9 @@ function monitorSocialPartner(now) {
     abort();
     return;
   }
-  if ((started || now >= socialAct.start - 300) && data.socialAction !== socialAct.action) abort();
+  if ((socialAct.started || now >= socialAct.start - 300) && data.socialAction !== socialAct.action) {
+    abort();
+  }
 }
 
 function socialInteract(other, now) {
@@ -1261,18 +1472,25 @@ function socialInteract(other, now) {
   }
 
   const action = pickSocialAction();
+  const movement = action === 'walk' || action === 'jump' || action === 'skate';
+  const separating = separateFrom(other);
   const wa = workAreaForWindow();
   const b = win.getBounds();
-  const actionDir = action === 'jump' ? dir : roomDir(wa, b.x);
+  const actionDir = action === 'jump' ? dir : movement ? roomDir(wa, b.x) : dir;
   const duration =
     action === 'walk'
       ? 5200 + Math.random() * 2600
       : action === 'jump'
         ? 3400
-        : 3000 + Math.random() * 1200;
-  const start = now + SOCIAL_START_DELAY;
-  const until = start + duration + 1600;
+        : action === 'skate'
+          ? 3000 + Math.random() * 1200
+          : action === 'name'
+            ? 3200
+            : 2600;
+  const start = now + SOCIAL_START_DELAY + (separating ? 400 : 0);
+  const until = start + duration + (movement ? 1600 : 1400);
 
+  clearSocialState();
   socialAct = {
     action,
     start,
@@ -1281,16 +1499,20 @@ function socialInteract(other, now) {
     dir: actionDir,
     lead: SOCIAL_ID,
     partner: other.id || '',
+    partnerName: other.name || other.id || '你',
+    started: false,
   };
   socialQuietUntil = until + 1000;
   socialJoinedKey = `${SOCIAL_ID}:${start}`;
   writePresence();
   scheduleSocialAction(socialAct);
-  express('happy', {
-    speech: pick(socialActionLines[action] || socialJoinLines),
-    effect: 'sparkle',
-    hold: 1300,
-  });
+  if (movement) {
+    express('happy', {
+      speech: pick(socialActionLines[action] || socialJoinLines),
+      effect: 'sparkle',
+      hold: 1300,
+    });
+  }
 }
 
 function joinSocialAction(other, now) {
@@ -1308,13 +1530,15 @@ function joinSocialAction(other, now) {
   clearTimeout(socialPendingTimer);
   socialPendingTimer = null;
 
+  const separating = separateFrom(other);
   const rawStart = Number(other.socialStart) || now;
   const rawDuration = clamp(Number(other.socialDuration) || 4000, 600, 12000);
   const elapsed = Math.max(0, now - rawStart);
-  const start = Math.max(now, rawStart);
+  const start = Math.max(now + (separating ? 520 : 0), rawStart);
   const duration = Math.max(700, rawDuration - elapsed);
   const until = Math.max(Number(other.socialUntil) || 0, start + duration + 1200);
 
+  clearSocialState();
   socialAct = {
     action: other.socialAction,
     start,
@@ -1323,6 +1547,8 @@ function joinSocialAction(other, now) {
     dir: Number(other.socialDir) < 0 ? -1 : 1,
     lead: other.id,
     partner: other.id,
+    partnerName: other.name || other.id || '你',
+    started: false,
   };
   socialJoinedKey = key;
   socialCooldownUntil = now + 30000 + Math.random() * 30000;
@@ -1355,6 +1581,7 @@ function runSocialAction(session) {
   socialClearDark();
   clearTimeout(exprTimer);
   exprTimer = null;
+  socialAct.started = true;
 
   if (session.action === 'walk') {
     const wa = workAreaForWindow();
@@ -1435,7 +1662,38 @@ function runSocialAction(session) {
     return;
   }
 
-  clearSocialState();
+  if (session.action !== 'greet' && session.action !== 'name') {
+    clearSocialState();
+    return;
+  }
+
+  const isLead = session.lead === SOCIAL_ID;
+  const otherName = session.partnerName || '你';
+  const nameAction = session.action === 'name';
+  const speech = socialLineFor(session.action, otherName, isLead);
+  const delay = isLead ? 0 : Math.min(900, Math.max(200, session.duration / 3));
+
+  clearTimeout(socialSpeakTimer);
+  socialSpeakTimer = setTimeout(() => {
+    socialSpeakTimer = null;
+    if (!socialAct.action || socialAct.start !== session.start) return;
+    if (mode !== 'idle' || drag.active) return;
+    express(nameAction ? 'giggle' : 'wave', {
+      speech,
+      effect: nameAction ? 'hearts' : 'sparkle',
+      hold: 2400,
+    });
+  }, delay);
+
+  clearTimeout(socialEndTimer);
+  socialEndTimer = setTimeout(() => {
+    socialEndTimer = null;
+    if (socialAct.action === session.action && socialAct.start === session.start) {
+      clearSocialState();
+      writePresence();
+      scheduleBehavior();
+    }
+  }, Math.max(0, session.until - Date.now()) + 60);
 }
 
 function finishSocialHop() {
@@ -1458,6 +1716,7 @@ function finishSocialHop() {
 function checkSocial(now) {
   if (!revealed || !win || win.isDestroyed() || !win.isVisible()) return;
   if (drag.active || mode !== 'idle' || taskActive) return;
+  if (refreshAnyTaskRunning(now)) return;
   let files;
   try {
     files = fs.readdirSync(getSocialDir());
@@ -1488,7 +1747,7 @@ function checkSocial(now) {
     if (otherDisplay.id !== myDisplay.id) continue;
     const dx = Math.abs(data.x + WIN_W / 2 - (me.x + WIN_W / 2));
     const dy = Math.abs(data.y + WIN_H - (me.y + WIN_H));
-    if (dx < 360 && dy < 80) {
+    if (dx < 200 && dy < 60) {
       if (data.dark && !isDarkNow()) {
         if (socialAct.action && now < socialAct.until) continue;
         if (now < socialCooldownUntil) continue;
@@ -1572,8 +1831,9 @@ function pointOverPet(px, py) {
   const info = spriteAlpha(currentSprite);
   if (!info) return false;
   const meta = PET_MANIFEST[currentSprite] || PET_MANIFEST.idle || info;
-  const w = meta.w * BASE_HEIGHT * cfg.scale;
-  const h = meta.h * BASE_HEIGHT * cfg.scale;
+  const factor = SPRITE_SCALE[currentSprite] || 1;
+  const w = meta.w * BASE_HEIGHT * cfg.scale * factor;
+  const h = meta.h * BASE_HEIGHT * cfg.scale * factor;
   const left = (WIN_W - w) / 2;
   const top = WIN_H - h;
   if (px < left - 2 || px > left + w + 2 || py < top - 2 || py > top + h + 2) {
@@ -1847,6 +2107,7 @@ function createWindow() {
   });
 
   win.on('hide', () => {
+    if (mode === 'peek') exitPeek(true);
     pointerEnabled = false;
     if (tray) tray.setContextMenu(buildTrayMenu());
   });
@@ -1883,6 +2144,8 @@ function reveal() {
       cfg.energy = Math.min(100, cfg.energy + 1.6);
       const slept = Date.now() - sleepSince;
       if ((slept > 30000 && cfg.energy >= 99) || slept > 240000) wake();
+    } else if (mode === 'peek') {
+      cfg.energy = Math.min(100, cfg.energy + 0.35);
     } else {
       cfg.energy = Math.max(0, cfg.energy - 0.03);
       if (
@@ -1911,8 +2174,10 @@ ipcMain.on('pet:bubble-rect', (_e, rect) => {
 
 ipcMain.on('pet:menu-state', (_e, open) => {
   menuOpen = !!open;
-  if (menuOpen) setPointerEnabled(true);
-  else updatePointer();
+  if (menuOpen) {
+    if (mode === 'peek') exitPeek(true);
+    setPointerEnabled(true);
+  } else updatePointer();
 });
 
 ipcMain.on('pet:click', () => {
@@ -1998,7 +2263,7 @@ if (!gotLock) {
   });
 
   app.on('display-metrics-changed', () => {
-    if (!win || !revealed || drag.active) return;
+    if (!win || !revealed || drag.active || mode === 'peek') return;
     const b = win.getBounds();
     const wa = workAreaForWindow();
     win.setPosition(
