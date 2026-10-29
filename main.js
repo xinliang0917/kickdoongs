@@ -1308,6 +1308,7 @@ function tick() {
 
     const hopT = (now - skate.hopStart) / skate.hopDuration;
     if (hopT > 0 && hopT < 1) {
+      ny -= Math.sin(Math.PI * hopT) * 82;
       if (!skate.hopDone) {
         skate.hopDone = true;
         send('pet:effect', { type: 'sparkle' });

@@ -373,26 +373,20 @@ body.peek-right .fx.z.z3 {
 }
 
 .pet.kickflip .flipper {
-  transform-origin: 50% 49%;
-  animation: wholeSpin var(--flip-duration, 760ms) cubic-bezier(0.42, 0.02, 0.58, 1) both;
+  transform-origin: 50% 50%;
+  animation: riderTilt var(--flip-duration, 760ms) ease-in-out both;
 }
 
 .pet.kickflip #sprite.skating {
   animation: none;
 }
 
-@keyframes wholeSpin {
+@keyframes riderTilt {
   0% {
     transform: scaleX(var(--dir, 1)) rotate(0deg);
   }
-  25% {
-    transform: scaleX(var(--dir, 1)) rotate(90deg);
-  }
   50% {
     transform: scaleX(var(--dir, 1)) rotate(180deg);
-  }
-  75% {
-    transform: scaleX(var(--dir, 1)) rotate(270deg);
   }
   100% {
     transform: scaleX(var(--dir, 1)) rotate(360deg);
