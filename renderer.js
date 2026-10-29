@@ -42,6 +42,7 @@ let bubbleHideTimer = null;
 let fxTimer = null;
 let angryTimer = null;
 let landTimer = null;
+let kickflipTimer = null;
 let shiverTimer = null;
 
 const defaultEffects = {
@@ -114,9 +115,16 @@ function startKickflip(duration) {
   sprite.classList.remove('skating');
   sprite.src = 'assets/pet/skate_rider.png';
   applyScale();
+  clearTimeout(kickflipTimer);
+  kickflipTimer = setTimeout(() => {
+    kickflipTimer = null;
+    endKickflip();
+  }, ms + 120);
 }
 
 function endKickflip() {
+  clearTimeout(kickflipTimer);
+  kickflipTimer = null;
   pet.classList.remove('kickflip');
   pet.style.removeProperty('--flip-duration');
   if (currentName === 'skate') {

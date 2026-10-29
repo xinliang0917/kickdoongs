@@ -662,6 +662,8 @@ function setFacing(next) {
 function stopSkate() {
   if (mode !== 'skate') return;
   mode = 'idle';
+  send('pet:kickflip-end');
+  express('idle', { speech: null, effect: null, hold: 0 });
   const wa = workAreaForWindow();
   const b = win.getBounds();
   win.setPosition(Math.round(b.x), Math.round(groundFor(wa)), false);
@@ -1799,6 +1801,7 @@ function pointOverPet(px, py) {
   if (px < left - 2 || px > left + w + 2 || py < top - 2 || py > top + h + 2) {
     return false;
   }
+  if (currentSprite === 'skate') return true;
   let nx = (px - left) / w;
   const ny = (py - top) / h;
   if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return false;

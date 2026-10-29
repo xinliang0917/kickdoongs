@@ -280,7 +280,7 @@ body.peek-right .fx.z.z3 {
   left: 9%;
 }
 
-.pet.angry {.pet.angry {
+.pet.angry {
   animation: shake 0.42s linear 3;
 }
 
@@ -337,6 +337,7 @@ body.peek-right .fx.z.z3 {
   z-index: 0;
   bottom: 0;
   left: 50%;
+  display: none;
   width: auto;
   height: 100%;
   opacity: 0;
@@ -348,6 +349,7 @@ body.peek-right .fx.z.z3 {
 }
 
 .pet.kickflip .trick-board {
+  display: block;
   opacity: 1;
   animation: kickflip var(--flip-duration, 760ms) cubic-bezier(0.42, 0.02, 0.58, 1) both;
 }
@@ -560,7 +562,7 @@ body.peek-right .fx.z.z3 {
   }
 }
 
-@keyframes waddle {@keyframes waddle {
+@keyframes waddle {
   0%,
   100% {
     transform: translateY(0) rotate(-1.6deg);
