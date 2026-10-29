@@ -1,4 +1,4 @@
-﻿* {
+* {
   box-sizing: border-box;
 }
 
@@ -308,7 +308,7 @@ body.peek-right .fx.z.z3 {
   left: 9%;
 }
 
-.pet.angry {.pet.angry {
+.pet.angry {
   animation: shake 0.42s linear 3;
 }
 
@@ -565,35 +565,35 @@ body.peek-right .fx.z.z3 {
   }
 }
 
-@keyframes waddle {@keyframes waddle {
+@keyframes waddle {
   0%,
   100% {
-    transform: translateY(0);
+    transform: translateX(0);
   }
   25% {
-    transform: translateY(-2px);
+    transform: translateX(-1px);
   }
   50% {
-    transform: translateY(0);
+    transform: translateX(0);
   }
   75% {
-    transform: translateY(-2px);
+    transform: translateX(1px);
   }
 }
 
 @keyframes runWaddle {
   0%,
   100% {
-    transform: translateY(0) rotate(-3.2deg) scale(1.01, 0.99);
+    transform: rotate(-3.2deg) scale(1.01, 0.99);
   }
   25% {
-    transform: translateY(-6px) rotate(0deg) scale(1, 1.02);
+    transform: rotate(0deg) scale(1, 1.02);
   }
   50% {
-    transform: translateY(0) rotate(3.2deg) scale(1.01, 0.99);
+    transform: rotate(3.2deg) scale(1.01, 0.99);
   }
   75% {
-    transform: translateY(-6px) rotate(0deg) scale(1, 1.02);
+    transform: rotate(0deg) scale(1, 1.02);
   }
 }
 

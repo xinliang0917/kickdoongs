@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -495,7 +495,7 @@ function enterPeek() {
   setWalking(false);
   send('pet:peek', { on: true, side });
   express('bored', { speech: null, effect: 'zzz', hold: 6000, persistent: true });
-  startGlide(x, y, 900, null);
+  win.setPosition(x, y, false);
   writePresence();
 }
 
@@ -513,13 +513,9 @@ function exitPeek(immediate = false) {
     )
   );
   const y = Math.round(groundFor(wa));
-  if (immediate) {
-    glide = null;
-    win.setPosition(x, y, false);
-    saveConfig();
-  } else {
-    startGlide(x, y, 680, () => saveConfig());
-  }
+  glide = null;
+  win.setPosition(x, y, false);
+  saveConfig();
   express('sleepy', { speech: '唔……姐姐回来了。', hold: 2600 });
 }
 
@@ -2066,11 +2062,9 @@ function buildTrayMenu() {
     { type: 'separator' },
     { label: '摸摸头', click: () => { ensureVisible(); petClick(true); } },
     { label: '喂麻婆豆腐', click: feed },
-    { label: '打游戏', click: playGame },
     { label: mode === 'sleep' ? '叫醒它' : '睡一觉', click: toggleSleep },
     { label: '去散步', click: () => { ensureVisible(); startWalk(); } },
     { label: '跑一跑', click: () => { ensureVisible(); startRun(); } },
-    { label: '躲猫猫', click: startHide },
     { label: '跳一跳', click: () => { ensureVisible(); startJump(); } },
     { label: '玩滑板', click: startSkate },
     { type: 'separator' },
