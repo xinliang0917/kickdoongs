@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, powerMonitor } = require('electron');
+﻿const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -1128,7 +1128,7 @@ const SOCIAL_NAME = '啾汪';
 const socialLines = {"tuxuan": ["汪汪！兔玹！", "兔玹，一起玩！", "兔玹，你好呀！"], "huadong": ["花东！一起玩！", "汪汪！花东！", "花东，你在干嘛？"], "default": ["汪汪！一起玩！", "你好呀！"]};
 const socialDarkLines = {};
 const SOCIAL_START_DELAY = 1400;
-const SOCIAL_ACTIONS = ['walk', 'jump', 'skate', 'greet', 'name'];
+const SOCIAL_ACTIONS = ['walk', 'jump', 'skate', 'greet', 'name', 'charge'];
 const socialActionLines = {
   walk: ['一起散步吧！', '我们走走看～', '一起走走～'],
   jump: ['一起蹦蹦跳跳！', '跳起来～', '一起蹦一蹦！'],
@@ -1330,7 +1330,7 @@ function separateFrom(other) {
 }
 
 function isJoinableSession(data, now) {
-  if (!data || !['greet', 'name'].includes(data.socialAction)) return false;
+  if (!data || !['greet', 'name', 'charge'].includes(data.socialAction)) return false;
   if (data.socialLead !== data.id || data.socialTarget !== SOCIAL_ID) return false;
   if (!Number.isFinite(data.socialStart) || !Number.isFinite(data.socialUntil)) return false;
   if (now >= Number(data.socialUntil)) return false;
@@ -1603,6 +1603,25 @@ function runSocialAction(session) {
     return;
   }
 
+  if (session.action === 'charge') {
+    express('happy', {
+      speech: '充电中～好舒服',
+      effect: 'sparkle',
+      hold: Math.max(1800, Math.min(3200, session.duration)),
+    });
+    clearTimeout(socialEndTimer);
+    socialEndTimer = setTimeout(() => {
+      socialEndTimer = null;
+      if (socialAct.action === 'charge' && socialAct.start === session.start) {
+        express('happy', { speech: '充满啦～', effect: 'hearts', hold: 2400 });
+        clearSocialState();
+        writePresence();
+        scheduleBehavior();
+      }
+    }, Math.max(0, session.until - Date.now()) + 60);
+    return;
+  }
+
   if (session.action !== 'greet' && session.action !== 'name') {
     clearSocialState();
     return;
@@ -1699,7 +1718,7 @@ function checkSocial(now) {
         fleeFrom(data);
         return;
       }
-      if (!isDarkNow() && isJoinableSession(data, now) && data.id < SOCIAL_ID) {
+      if (!isDarkNow() && isJoinableSession(data, now) && (data.id < SOCIAL_ID || data.socialAction === 'charge')) {
         joinSocialAction(data, now);
         return;
       }
