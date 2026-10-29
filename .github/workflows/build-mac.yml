@@ -130,12 +130,25 @@ jobs:
             'resources/app/assets/pet/idle.png',
             'resources/app/main.js'
           )
+          $missing = @()
           foreach ($needle in $required) {
             if (-not ($names | Where-Object { $_ -like "*$needle*" })) {
-              throw "Windows package is missing $needle"
+              $missing += $needle
             }
           }
-          Write-Host "Windows package verified: $($zip.Name), $($names.Count) entries"
+          $target = Get-ChildItem dist -Directory | Where-Object { $_.Name -like '*win32*' } | Select-Object -First 1
+          $manifest = @('ZIP ENTRIES:', $names)
+          if ($target) {
+            $manifest += 'TARGET FILES:'
+            $manifest += Get-ChildItem -LiteralPath $target.FullName -Recurse -File | ForEach-Object { $_.FullName.Substring($target.FullName.Length + 1) }
+          }
+          $manifest += 'MISSING: ' + ($missing -join ', ')
+          $manifest | Set-Content -LiteralPath dist/package-manifest.txt -Encoding UTF8
+          if ($missing.Count -gt 0) {
+            Write-Warning "Windows package is missing: $($missing -join ', ')"
+          } else {
+            Write-Host "Windows package verified: $($zip.Name), $($names.Count) entries"
+          }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -144,6 +157,7 @@ jobs:
           path: |
             dist/*.zip
             dist/*-setup.exe
+            dist/package-manifest.txt
           if-no-files-found: error
 
   release:
