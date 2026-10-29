@@ -173,6 +173,13 @@ jobs:
           generate_release_notes: ${{ steps.meta.outputs.notes == 'true' }}
           files: artifacts/*
 
+      - name: Remove legacy Windows zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          gh release delete-asset "$TAG" "${PET_SLUG}-win32-x64.zip" -y || true
+
       - name: Keep only the newest release for this pet
         env:
           GH_TOKEN: ${{ github.token }}
