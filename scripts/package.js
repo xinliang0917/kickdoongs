@@ -301,6 +301,32 @@ function buildWindows(rootPkg) {
 
   copyAppFiles(path.join(target, 'resources', 'app'), rootPkg);
 
+  for (const entry of fs.readdirSync(ELECTRON_DIST, { withFileTypes: true })) {
+    if (entry.name === 'electron.exe') continue;
+    retrySync(
+      `copy runtime ${entry.name}`,
+      () => {
+        fs.cpSync(path.join(ELECTRON_DIST, entry.name), path.join(target, entry.name), {
+          recursive: true,
+          force: true,
+        });
+      },
+      5,
+      1000
+    );
+  }
+  retrySync(
+    'copy app assets',
+    () => {
+      fs.cpSync(path.join(ROOT, 'assets'), path.join(target, 'resources', 'app', 'assets'), {
+        recursive: true,
+        force: true,
+      });
+    },
+    5,
+    1000
+  );
+
   const zip = path.join(OUT_ROOT, `${APP_SLUG}-win32-${ARCH}.zip`);
   console.log(`Creating ${zip}...`);
   retrySync(
