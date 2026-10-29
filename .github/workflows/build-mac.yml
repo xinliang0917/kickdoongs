@@ -1,4 +1,4 @@
-name: Build packages
+﻿name: Build packages
 
 on:
   workflow_dispatch:
@@ -121,7 +121,7 @@ jobs:
           if (-not $zip) { throw 'Windows zip was not created' }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $archive = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName)
-          $names = @($archive.Entries | ForEach-Object { $_.FullName })
+          $names = @($archive.Entries | ForEach-Object { $_.FullName.Replace("\", "/") })
           $archive.Dispose()
           $required = @(
             'icudtl.dat',
