@@ -88,7 +88,7 @@ function clamp(v, lo, hi) {
 }
 
 function applyDir() {
-  const flip = currentName === 'skate' ? -dir : dir;
+  const flip = dir;
   flipper.style.setProperty('--dir', String(flip));
 }
 
@@ -130,7 +130,7 @@ function setSprite(name) {
   pet.classList.remove('kickflip');
   pet.style.removeProperty('--flip-duration');
   sprite.src = image.src;
-  sprite.classList.toggle('skating', currentName === 'skate');
+  pet.classList.toggle('skating', currentName === 'skate');
   if (blocksEl) blocksEl.classList.toggle('skating', currentName === 'skate');
   applyDir();
   applyScale();
@@ -757,7 +757,7 @@ function loadSprites() {
             resolve();
           };
           image.onerror = () => resolve();
-          image.src = `assets/pet/${name}.png`;
+          image.src = name === 'skate' ? 'assets/pet/skate_rider.png' : `assets/pet/${name}.png`;
         })
     )
   ).then(() => {

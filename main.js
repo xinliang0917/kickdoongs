@@ -520,7 +520,7 @@ function enterPeek() {
   setWalking(false);
   send('pet:peek', { on: true, side });
   express('bored', { speech: null, effect: 'zzz', hold: 6000, persistent: true });
-  startGlide(x, y, 900, null);
+  win.setPosition(x, y, false);
   writePresence();
 }
 
@@ -538,13 +538,9 @@ function exitPeek(immediate = false) {
     )
   );
   const y = Math.round(groundFor(wa));
-  if (immediate) {
-    glide = null;
-    win.setPosition(x, y, false);
-    saveConfig();
-  } else {
-    startGlide(x, y, 680, () => saveConfig());
-  }
+  glide = null;
+  win.setPosition(x, y, false);
+  saveConfig();
   express('sleepy', { speech: '唔……姐姐回来了。', hold: 2600 });
 }
 
@@ -1836,7 +1832,7 @@ function pointOverPet(px, py) {
   let nx = (px - left) / w;
   const ny = (py - top) / h;
   if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return false;
-  const mirrored = currentSprite === 'skate' ? facing > 0 : facing < 0;
+  const mirrored = facing < 0;
   if (mirrored) nx = 1 - nx;
   const ix = clamp(Math.floor(nx * info.w), 0, info.w - 1);
   const iy = clamp(Math.floor(ny * info.h), 0, info.h - 1);
