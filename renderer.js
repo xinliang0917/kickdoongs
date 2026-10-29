@@ -31,6 +31,7 @@ let dir = 1;
 let sleeping = false;
 let menuOpen = false;
 let dragging = false;
+let dragWatchTimer = null;
 let down = null;
 let popTimer = null;
 let bubbleTimer = null;
@@ -335,6 +336,15 @@ function detachDragListeners() {
   window.removeEventListener('pointercancel', onPointerCancel);
 }
 
+function armDragWatch() {
+  clearTimeout(dragWatchTimer);
+  dragWatchTimer = setTimeout(() => {
+    dragWatchTimer = null;
+    if (!dragging) return;
+    endPointer('abort');
+  }, 5000);
+}
+
 function endPointer(notify) {
   if (!down) return;
   const wasDragging = dragging;
@@ -342,6 +352,8 @@ function endPointer(notify) {
   down = null;
   dragging = false;
   detachDragListeners();
+  clearTimeout(dragWatchTimer);
+  dragWatchTimer = null;
   try {
     sprite.releasePointerCapture(id);
   } catch {
@@ -377,8 +389,10 @@ function onPointerMove(e) {
     hideBubble();
     pet.classList.add('dragging');
     window.pet.dragStart({ offsetX: down.offsetX, offsetY: down.offsetY });
+    armDragWatch();
   }
   window.pet.dragMove({ x: e.screenX, y: e.screenY });
+  armDragWatch();
 }
 
 function onPetPointerDown(e) {

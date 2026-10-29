@@ -254,10 +254,14 @@ body {
 }
 
 body.peek-right .pet {
+  left: 50%;
+  transition: none;
   animation: peekSwayRight 4.8s ease-in-out infinite;
 }
 
 body.peek-left .pet {
+  left: -50%;
+  transition: none;
   animation: peekSwayLeft 4.8s ease-in-out infinite;
 }
 

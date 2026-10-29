@@ -61,6 +61,7 @@ let skate = {
   hopDone: false,
   hopEnded: false,
 };
+let lastDragAt = Date.now();
 let drag = { active: false, offsetX: 0, offsetY: 0, samples: [] };
 const alphaCache = new Map();
 let peek = { side: 0, restoreX: null, wa: null, enteredAt: 0 };
@@ -510,14 +511,18 @@ function pollTask() {
 
 function startGlide(toX, toY, duration, done = null) {
   if (!win || win.isDestroyed()) return;
+  const x1 = Math.round(Number(toX));
+  const y1 = Math.round(Number(toY));
+  const ms = Number(duration);
+  if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(ms) || ms <= 0) return;
   const b = win.getBounds();
   glide = {
     x0: b.x,
     y0: b.y,
-    x1: Math.round(toX),
-    y1: Math.round(toY),
+    x1,
+    y1,
     t0: Date.now(),
-    duration: Math.max(120, duration),
+    duration: Math.max(120, ms),
     done,
   };
 }
@@ -527,7 +532,10 @@ function finishGlide() {
   const g = glide;
   glide = null;
   if (win && !win.isDestroyed()) {
-    win.setPosition(Math.round(g.x1), Math.round(g.y1), false);
+    const b = win.getBounds();
+    const x1 = Number.isFinite(g.x1) ? g.x1 : b.x;
+    const y1 = Number.isFinite(g.y1) ? g.y1 : b.y;
+    win.setPosition(Math.round(x1), Math.round(y1), false);
   }
   if (g.done) g.done();
 }
@@ -544,8 +552,7 @@ function enterPeek() {
   const w = meta.w * BASE_HEIGHT * cfg.scale;
   const h = meta.h * BASE_HEIGHT * cfg.scale;
   const side = b.x + WIN_W / 2 <= wa.x + wa.width / 2 ? -1 : 1;
-  const hidden = WIN_W / 2 + w * 0.04;
-  const x = side > 0 ? wa.x + wa.width - WIN_W + hidden : wa.x - hidden;
+  const x = side > 0 ? wa.x + wa.width - WIN_W : wa.x;
   const y = clamp(
     wa.y + wa.height * 0.46 - (WIN_H - h / 2),
     wa.y + 8,
@@ -984,6 +991,12 @@ function tick() {
   if (dt <= 0) return;
   if (!win.isVisible()) return;
   updatePointer();
+  if (drag.active && now - lastDragAt > 8000) {
+    drag.active = false;
+    mode = 'idle';
+    win.setPosition(win.getBounds().x, groundFor(workAreaForWindow()), false);
+  }
+  if (!drag.active && mode === 'drag') mode = 'idle';
   if (drag.active || mode === 'drag') return;
 
   if (now - lastPeekCheck > 900) {
@@ -992,6 +1005,10 @@ function tick() {
   }
 
   if (glide) {
+    if (!Number.isFinite(glide.duration) || now - glide.t0 > glide.duration + 1500) {
+      finishGlide();
+      return;
+    }
     const t = clamp((now - glide.t0) / glide.duration, 0, 1);
     const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     win.setPosition(
@@ -1368,6 +1385,7 @@ function roomDir(wa, x) {
 const SOCIAL_GAP = 22;
 
 function separateFrom(other) {
+  return false;
   if (!win || win.isDestroyed() || drag.active || glide) return false;
   if (mode !== 'idle') return false;
   const meta = PET_MANIFEST.idle || { w: 453, h: 514 };
@@ -1829,7 +1847,8 @@ function pointOverPet(px, py) {
   const factor = SPRITE_SCALE[currentSprite] || 1;
   const w = meta.w * BASE_HEIGHT * cfg.scale * factor;
   const h = meta.h * BASE_HEIGHT * cfg.scale * factor;
-  const left = (WIN_W - w) / 2;
+  let left = (WIN_W - w) / 2;
+  if (mode === 'peek') left += (WIN_W / 2) * peek.side;
   const top = WIN_H - h;
   if (px < left - 2 || px > left + w + 2 || py < top - 2 || py > top + h + 2) {
     return false;
@@ -2201,6 +2220,7 @@ ipcMain.on('pet:drag-start', (_e, info) => {
   stopWalk();
   mode = 'drag';
   drag.active = true;
+  lastDragAt = Date.now();
   setPointerEnabled(true);
   drag.offsetX = Number(info?.offsetX) || 0;
   drag.offsetY = Number(info?.offsetY) || 0;
@@ -2215,6 +2235,7 @@ ipcMain.on('pet:drag-start', (_e, info) => {
 
 ipcMain.on('pet:drag-move', () => {
   if (!drag.active || !win) return;
+  lastDragAt = Date.now();
   const point = screen.getCursorScreenPoint();
   const x = Math.round(point.x - drag.offsetX);
   const y = Math.round(point.y - drag.offsetY);
