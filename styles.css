@@ -929,13 +929,10 @@ body.peek-right .fx.z.z3 {
 /* ---- charge ---- */
 
 .charge {
-  position: fixed;
   z-index: 35;
-  top: 8px;
-  left: 50%;
   width: 172px;
+  margin-bottom: 6px;
   pointer-events: none;
-  transform: translateX(-50%);
 }
 
 .charge[hidden] {
