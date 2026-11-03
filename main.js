@@ -1046,7 +1046,11 @@ function playGame() {
     mode = 'idle';
     send('pet:game', { on: false });
     cfg.energy = Math.max(0, cfg.energy - 2);
-    express('happy', { speech: '赢啦！', effect: 'hearts', hold: 3400 });
+    if (Math.random() < 0.5) {
+      express('happy', { speech: '赢啦！莫呀莫呀！', effect: 'sparkle', hold: 3400 });
+    } else {
+      express('confused', { speech: '输了……晕乎乎的……', effect: 'sweat', hold: 3400 });
+    }
     scheduleBehavior();
   }, 6200);
 }
