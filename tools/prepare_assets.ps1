@@ -58,7 +58,7 @@ public static class MiaoYaoAssets
         using (Graphics g = Graphics.FromImage(result))
         using (SolidBrush white = new SolidBrush(Color.White))
         {
-            g.FillRectangle(white, 250, 175, 255, 130);
+            g.FillRectangle(white, 250, 175, 290, 130);
         }
 
         Rectangle crop = new Rectangle(110, 135, 420, 190);
@@ -89,10 +89,13 @@ public static class MiaoYaoAssets
                 new Rectangle(0, 0, crop.Width, crop.Height),
                 GraphicsUnit.Pixel
             );
-            using (SolidBrush dot = new SolidBrush(Color.FromArgb(190, 132, 128, 132)))
+            using (SolidBrush dot = new SolidBrush(Color.FromArgb(255, 129, 125, 127)))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.FillEllipse(dot, 505, 213, 7, 7);
+                foreach (Point point in new[] { new Point(508, 222), new Point(516, 234), new Point(524, 246) })
+                {
+                    g.FillEllipse(dot, point.X - 3, point.Y - 3, 7, 7);
+                }
             }
         }
         patch.Dispose();
