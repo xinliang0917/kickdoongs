@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const WIN_W = 360;
 const WIN_H = 460;
 const GRAVITY = 2200;
-const BASE_HEIGHT = 0.6;
+const BASE_HEIGHT = 0.56;
 const PET_MANIFEST = JSON.parse(
   fs.readFileSync(path.join(__dirname, 'assets', 'pet', 'manifest.json'), 'utf8')
 );

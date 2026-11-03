@@ -5,7 +5,7 @@ const NAMES = [
   'angry', 'back', 'surprised', 'cuddle', 'skate',
 ];
 
-const BASE_HEIGHT = 0.6;
+const BASE_HEIGHT = 0.56;
 const sprite = document.getElementById('sprite');
 const flipper = document.getElementById('flipper');
 const pet = document.getElementById('pet');
