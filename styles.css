@@ -744,8 +744,8 @@ body.peek-right .fx.z.z3 {
   padding: 6px;
   border: 2px solid #16171a;
   border-radius: 16px;
-  background: rgba(255, 183, 94, 0.985);
-  box-shadow: 0 14px 32px rgba(12, 24, 44, 0.24);
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(120, 70, 20, 0.18);
   font-size: 13px;
   color: #1b1c20;
   transform-origin: 50% 100%;
@@ -773,7 +773,7 @@ body.peek-right .fx.z.z3 {
 }
 
 .menu .item:hover {
-  background: #ffd9a3;
+  background: #ffe8cc;
 }
 
 .menu .item.danger {
@@ -787,7 +787,7 @@ body.peek-right .fx.z.z3 {
 .menu .sep {
   height: 1px;
   margin: 5px 8px;
-  background: rgba(121, 72, 14, 0.22);
+  background: #f2dcc5;
 }
 
 .menu .group {
@@ -820,20 +820,20 @@ body.peek-right .fx.z.z3 {
 }
 
 .menu .chip:hover {
-  border-color: #9ac9f5;
+  border-color: #f2b56b;
 }
 
 .menu .chip.active {
-  border-color: #5aa9ff;
-  background: #dcefff;
-  color: #1d5f9f;
+  border-color: #e8902e;
+  background: #ffedd8;
+  color: #9a4a00;
   font-weight: 700;
 }
 
 .menu .mark {
   width: 16px;
   text-align: center;
-  color: #2f88e0;
+  color: #e8902e;
   font-weight: 900;
 }
 
