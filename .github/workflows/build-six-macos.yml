@@ -1,0 +1,173 @@
+name: Build six pets combined
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - combined
+
+permissions:
+  contents: read
+
+concurrency:
+  group: six-packages-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
+env:
+  PET_SLUG: kickdoongs-six
+  PET_NAME: kickdoongs 六只桌宠
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: macos-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - arm64
+          - x64
+    steps:
+      - name: Checkout huadong
+        uses: actions/checkout@v4
+        with:
+          ref: huadong
+          path: pets/huadong
+      - name: Checkout miaoyao
+        uses: actions/checkout@v4
+        with:
+          ref: miaoyao
+          path: pets/miaoyao
+      - name: Checkout jiuwang
+        uses: actions/checkout@v4
+        with:
+          ref: jiuwang
+          path: pets/jiuwang
+      - name: Checkout qihou
+        uses: actions/checkout@v4
+        with:
+          ref: qihou
+          path: pets/qihou
+      - name: Checkout tuxuan
+        uses: actions/checkout@v4
+        with:
+          ref: tuxuan
+          path: pets/tuxuan
+      - name: Checkout wumin
+        uses: actions/checkout@v4
+        with:
+          ref: wumin
+          path: pets/wumin
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pets/*/package-lock.json
+
+      - name: Patch social fixes
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          for (const slug of ['huadong', 'miaoyao', 'jiuwang', 'qihou', 'tuxuan', 'wumin']) {
+            const p = `pets/${slug}/main.js`;
+            let s = fs.readFileSync(p, 'utf8');
+            s = s.replace(/^[ \t]*if \(refreshAnyTaskRunning\(now\)\) return;[ \t]*\r?\n/m, '');
+            s = s.replace(/dx < \d+ && dy < 60/g, 'dx < 520 && dy < 60');
+            fs.writeFileSync(p, s);
+          }
+          NODE
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for slug in huadong miaoyao jiuwang qihou tuxuan wumin; do
+            echo "== npm ci $slug =="
+            (cd "pets/$slug" && npm ci --no-audit --no-fund)
+          done
+
+      - name: Package apps
+        shell: bash
+        run: |
+          set -euo pipefail
+          for slug in huadong miaoyao jiuwang qihou tuxuan wumin; do
+            echo "== package $slug (${{ matrix.arch }}) =="
+            (cd "pets/$slug" && PET_ARCH=${{ matrix.arch }} npm run package)
+          done
+
+      - name: Collect app bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf payload
+          mkdir -p payload
+          for slug in huadong miaoyao jiuwang qihou tuxuan wumin; do
+            app=$(find "pets/$slug/dist" -name '*.app' -type d -not -path '*/node_modules/*' | head -n 1)
+            if [ -z "$app" ]; then
+              echo "app bundle not found for $slug"
+              find "pets/$slug/dist" -print | head -n 50
+              exit 1
+            fi
+            cp -R "$app" payload/
+          done
+          ls -la payload
+
+      - name: Make installer pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkgbuild --root payload --identifier "com.kickdoongs.six" --version "1.0.0" --install-location "/Applications" "kickdoongs-six-darwin-${{ matrix.arch }}.pkg"
+
+      - name: Make dmg
+        shell: bash
+        run: |
+          set -euo pipefail
+          hdiutil create -volname "kickdoongs 六只桌宠" -srcfolder payload -ov -format UDZO "kickdoongs-six-darwin-${{ matrix.arch }}.dmg"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kickdoongs-six-macos-${{ matrix.arch }}
+          path: |
+            kickdoongs-six-darwin-${{ matrix.arch }}.pkg
+            kickdoongs-six-darwin-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
+  release:
+    name: Publish combined release
+    needs: [macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Clean previous packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="kickdoongs-six-latest"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release view "$TAG" --json assets --jq '.assets[].name' | while IFS= read -r name; do
+              case "$name" in
+                *.dmg|*.pkg) gh release delete-asset "$TAG" "$name" -y || true ;;
+              esac
+            done
+          fi
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kickdoongs-six-latest
+          name: kickdoongs 六只桌宠 最新构建
+          prerelease: true
+          generate_release_notes: false
+          files: artifacts/*
