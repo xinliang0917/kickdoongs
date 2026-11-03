@@ -89,6 +89,11 @@ public static class MiaoYaoAssets
                 new Rectangle(0, 0, crop.Width, crop.Height),
                 GraphicsUnit.Pixel
             );
+            using (SolidBrush dot = new SolidBrush(Color.FromArgb(190, 132, 128, 132)))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.FillEllipse(dot, 505, 213, 7, 7);
+            }
         }
         patch.Dispose();
         return result;
