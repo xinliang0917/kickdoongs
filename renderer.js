@@ -1,4 +1,4 @@
-const FILES = ['idle', 'dizzy', 'sleepy', 'goodnight', 'charge', 'skate'];
+﻿const FILES = ['idle', 'dizzy', 'sleepy', 'goodnight', 'charge', 'skate'];
 
 const ALIAS = {
   idle: 'idle',
@@ -23,7 +23,7 @@ const ALIAS = {
 };
 
 const NAMES = Object.keys(ALIAS);
-const BASE_HEIGHT = 0.34;
+const BASE_HEIGHT = 0.27;
 const BASE_SPRITE_HEIGHT = 471;
 const sprite = document.getElementById('sprite');
 const flipper = document.getElementById('flipper');
