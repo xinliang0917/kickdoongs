@@ -77,6 +77,9 @@ jobs:
             let s = fs.readFileSync(p, 'utf8');
             s = s.replace(/^[ \t]*if \(refreshAnyTaskRunning\(now\)\) return;[ \t]*\r?\n/m, '');
             s = s.replace(/dx < \d+ && dy < 60/g, 'dx < 520 && dy < 60');
+            if (slug === 'tuxuan') {
+              s = s.replace('好热……姐姐，我想吃蔬菜沙拉。', '好饿……姐姐，我想吃蔬菜沙拉。');
+            }
             fs.writeFileSync(p, s);
           }
           NODE
